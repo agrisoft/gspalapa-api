@@ -45,35 +45,36 @@ app.config['SECURITY_PASSWORD_SALT'] = 'PALAPA_ini_PALAPA_ini_PALAPA_ini_PALAPA'
 app.config['WTF_CSRF_ENABLED'] = False
 app.config['SECURITY_TOKEN_MAX_AGE'] = 365*24*60*60*1000
 app.config['SECRET_KEY'] = 'PALAPA ini PALAPA ini PALAPA ini PALAPA'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://palapa:palapa@192.168.198.133/palapa'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa'
 app.config['SQLALCHEMY_BINDS'] = {
-    'dbdev': 'postgres://palapa:palapa@192.168.198.133/palapa_dev',
-    'dbprod': 'postgres://palapa:palapa@192.168.198.133/palapa_prod',
-    'dbpub': 'postgres://palapa:palapa@192.168.198.133/palapa_pub',
-    'services': 'postgres://palapa:palapa@192.168.198.133/palapa'
+    'dbdev': 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa_dev',
+    'dbprod': 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa_prod',
+    'dbpub': 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa_pub',
+    'services': 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa'
 }
 app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
-app.config['SQLALCHEMY_DATASTORE'] = 'postgres://palapa:palapa@192.168.198.133/'
-app.config['GEOSERVER_REST_URL'] = 'http://192.168.198.133:8080/geoserver/rest/'
-app.config['GEOSERVER_WMS_URL'] = 'http://192.168.198.133:8080/geoserver/wms?'
-app.config['GEOSERVER_WFS_URL'] = 'http://192.168.198.133:8080/geoserver/wfs?'
+app.config['SQLALCHEMY_DATASTORE'] = 'postgres://palapa:palapa@palapa.agrisoft-cb.com/'
+app.config['GEOSERVER_REST_URL'] = 'http://palapa.agrisoft-cb.com:8080/geoserver/rest/'
+app.config['GEOSERVER_WMS_URL'] = 'http://palapa.agrisoft-cb.com:8080/geoserver/wms?'
+app.config['GEOSERVER_WFS_URL'] = 'http://palapa.agrisoft-cb.com:8080/geoserver/wfs?'
 app.config['GEOSERVER_USER'] = 'palapa'
 app.config['GEOSERVER_PASS'] = 'palapa'
 app.config['GEOSERVER_THUMBNAILS'] = '/var/www/html/assets/thumbnails/'
-app.config['GEOSERVER_LAYERS_PROP'] = '/cygdrive/d/TEMP/security/layers.properties'
-app.config['DATASTORE_HOST'] = '192.168.198.133'
+app.config['GEOSERVER_LAYERS_PROP'] = '/var/lib/tomcat/webapps/geoserver/data/security/layers.properties'
+app.config['DATASTORE_HOST'] = 'palapa.agrisoft-cb.com'
 app.config['DATASTORE_PORT'] = '5432'
 app.config['DATASTORE_USER'] = 'palapa'
 app.config['DATASTORE_PASS'] = 'palapa'
 app.config['DATASTORE_DB'] = 'palapa'
-app.config['UPLOAD_FOLDER'] = '/cygdrive/d/Workspaces/DEV/gs-api/uploads/'
-app.config['RASTER_FOLDER'] = '/cygdrive/d/Workspaces/DEV/gs-api/data/'
+app.config['UPLOAD_FOLDER'] = '/mnt/uploads/'
+app.config['RASTER_FOLDER'] = '/mnt/data/'
 app.config['RASTER_STORE'] = '/mnt/store/'
 app.config['ALLOWED_EXTENSIONS'] = set(['zip','ZIP'])
 app.config['ALLOWED_VECTOR'] = set(['shp','SHP'])
 app.config['ALLOWED_RASTER'] = set(['tiff','tif','TIF','TIFF'])
-app.config['CSW_URL'] = 'http://localhost:8000/csw'
+app.config['CSW_URL'] = 'http://palapa.agrisoft-cb.com/csw'
+
 
 # extensions
 db = SQLAlchemy(app)
@@ -138,7 +139,7 @@ def allowed_sld(filename):
 def allowed_xml(filename):
     return '.' in filename and filename.rsplit('.',)[1] in set(['xml', 'XML'])
 
-def wkt2epsg(wkt, epsg='epsg.txt', forceProj4=False):
+def wkt2epsg(wkt, epsg='/opt/gs-api/app/epsg.txt', forceProj4=False):
     code = None
     p_in = osr.SpatialReference()
     s = p_in.ImportFromWkt(wkt)
@@ -221,7 +222,7 @@ def pgis2pgis(source_db, source_schema, source_table, dest_db, dest_schema, dest
         msg = "Copy gagal!"
     return msg
 
-def populateDB(source_shp, database):
+def populateDB(source_shp, database, kodesimpul):
     # Get Layer EPSG
     print 'Source: ' + source_shp
     driver = ogr.GetDriverByName('ESRI Shapefile')
@@ -231,9 +232,9 @@ def populateDB(source_shp, database):
     # print 'PG: ' + pg_conn
     shape_file = driver.Open(shape)
     # uuided = uuid.uuid4()
-    dt = datetime.datetime.now()
+    dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     print "DT", dt
-    uuided = re.sub('[-T:. ]','',str(dt).strip())
+    uuided = kodesimpul + str(dt)
     shape_id = source_shp.split('.')[0]+'-'+ str(uuided)
     layer = shape_file.GetLayer()
     crs = layer.GetSpatialRef()
@@ -242,10 +243,10 @@ def populateDB(source_shp, database):
         EPSG = wkt2epsg(crs.ExportToWkt())
         print EPSG
         ogr2ogr.main(["","-f", "PostgreSQL", pg_conn, shape,"-nln", shape_id,"-nlt","PROMOTE_TO_MULTI", "-a_srs",EPSG])
-        msg = " ETL Normal!"
+        msg = " Data masuk ke database secara normal!"
         return msg, EPSG, source_shp.split('.')[0], str(uuided), tipe
     except:
-        msg = " No Projection defined! Defaulting to EPSG:4326"
+        msg = " Data masuk ke database, namun proyeksi tidak didefinisikan. Memaksakan ke proyeksi EPSG:4326"
         EPSG = "EPSG:4326"
         return msg, EPSG, source_shp.split('.')[0], str(uuided), tipe
         ogr2ogr.main(["","-f", "PostgreSQL", pg_conn, shape,"-nln", shape_id,"-nlt","PROMOTE_TO_MULTI", "-a_srs",EPSG])
@@ -261,7 +262,9 @@ def populateKUGI(source_shp, database, schema, table, scale):
     print 'Shape: ' + shape
     # print 'PG: ' + pg_conn
     shape_file = driver.Open(shape)
-    uuided = uuid.uuid4()
+    dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    print "DT", dt
+    uuided = str(dt)
     shape_id = source_shp.split('.')[0]+'-'+ str(uuided)
     layer = shape_file.GetLayer()
     crs = layer.GetSpatialRef()
@@ -274,31 +277,33 @@ def populateKUGI(source_shp, database, schema, table, scale):
         try:
             ogro = ogr2ogr.main(["", "-append","-f", "PostgreSQL", pg_conn, shape,"-nln", fitur,"-nlt","PROMOTE_TO_MULTI", "-a_srs", EPSG])
             if ogro:
-                msg = " ETL Normal!"
+                msg = " Data masuk ke database secara normal!"
             else:
                 msg = " Terjadi kegagalan import!"
         except:
             msg = " Terjadi kegagalan import!"
         return msg, EPSG, source_shp.split('.')[0], str(uuided), tipe, ogro
     except:
-        msg = " No Projection defined! Defaulting to EPSG:4326"
+        msg = " Data masuk ke database, namun proyeksi tidak didefinisikan. Memaksakan ke proyeksi EPSG:4326"
         EPSG = "EPSG:4326"
         return msg, EPSG, source_shp.split('.')[0], str(uuided), tipe
         try:
             ogro = ogr2ogr.main(["", "-append","-f", "PostgreSQL", pg_conn, shape,"-nln", fitur,"-nlt","PROMOTE_TO_MULTI", "-a_srs", EPSG])
             if ogro:
-                msg = " ETL Normal!"
+                msg = " Data masuk ke database secara normal!"
             else:
                 msg = " Terjadi kegagalan import!"
         except:
             msg = " Terjadi kegagalan import!"
         return msg, EPSG, source_shp.split('.')[0], str(uuided), tipe, ogro
 
-def populateRS(source_ras):
+def populateRS(source_ras,kodesimpul):
     print source_ras
     catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
     name = source_ras.split('.')[0]
-    uuided = uuid.uuid4()
+    dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    print "DT", dt
+    uuided = kodesimpul + str(dt)
     layer_id = name + '-' + str(uuided)
     layer_file = app.config['RASTER_FOLDER']+layer_id.replace('-','_')+'.tif'
     print layer_file
@@ -335,6 +340,42 @@ def refresh_dbmetafieldview(database):
     #     msg = "Terjadi kesalahan!"  
     # print msg
     return msg
+
+def delete_spatial_records(skema,fitur,identifier,database):
+    if database == 'dbdev':
+        db = 'palapa_dev'
+    if database == 'dbprod':
+        db = 'palapa_prod'
+    if database == 'dbpub':
+        db = 'palapa_pub'
+    con = psycopg2.connect(dbname=db, user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+    con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = con.cursor()
+    sql = "DELETE from %s.%s WHERE metadata='%s';" % (str(skema), str(fitur), str(identifier))    
+    print sql
+    cur.execute(sql)
+    msg = "Deleted" 
+    return msg
+
+def delete_metakugi(fitur):
+    con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+    con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = con.cursor()
+    sql = "DELETE from metakugi WHERE fitur='%s';" % (str(fitur))    
+    print sql
+    cur.execute(sql)
+    msg = "Deleted" 
+    return msg
+
+def delete_metalinks(fitur):
+    con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+    con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = con.cursor()
+    sql = "DELETE from metalinks WHERE identifier='%s';" % (str(fitur))    
+    print sql
+    cur.execute(sql)
+    msg = "Deleted" 
+    return msg    
 
 def get_all(myjson, key):
     if type(myjson) == str:
@@ -425,6 +466,7 @@ class Group(db.Model):
     postalcode = db.Column(db.String(8))
     email = db.Column(db.String(128))
     country = db.Column(db.String(128))
+    kodesimpul = db.Column(db.Text)
 
 class GroupSchema(ma.ModelSchema):
     class Meta:
@@ -519,6 +561,15 @@ class SistemSchema(ma.ModelSchema):
     class Meta:
         model = Sistem        
 
+class KodeEPSG(db.Model):
+    __tablename__ = 'kode_epsg'
+    kode = db.Column(db.Text, primary_key=True)
+    keterangan = db.Column(db.Text)
+
+class KodeEPSG_RolesSchema(ma.ModelSchema):
+    class Meta:
+        model = KodeEPSG          
+
 def identity(payload):
     print 'Identity:', user
     return user
@@ -593,6 +644,7 @@ def sisteminfoedit():
         email = urllib2.unquote(header['pubdata']['email'])
         hoursofservice = urllib2.unquote(header['pubdata']['hoursofservice'])
         contactinstruction = urllib2.unquote(header['pubdata']['contactinstruction'])
+        kodesimpul = urllib2.unquote(header['pubdata']['kodesimpul'])
         print header
         r_address = Sistem.query.filter_by(key='address').first()
         r_administrativearea = Sistem.query.filter_by(key='administrativearea').first()
@@ -608,6 +660,7 @@ def sisteminfoedit():
         r_positionname = Sistem.query.filter_by(key='positionname').first()
         r_postalcode= Sistem.query.filter_by(key='postalcode').first()
         r_url = Sistem.query.filter_by(key='url').first()
+        r_kodesimpul = Sistem.query.filter_by(key='kodesimpul').first()
         r_address.value = address
         r_administrativearea.value = administrativearea
         r_city.value = city
@@ -622,6 +675,7 @@ def sisteminfoedit():
         r_positionname.value = positionname
         r_postalcode.value = postalcode
         r_url.value = url
+        r_kodesimpul.value = kodesimpul
         db.session.commit()
         return jsonify({'Result': True, 'MSG':'OK!'})
 
@@ -658,7 +712,8 @@ def new_user():
     name = header['pubdata'] ['name']
     password = header['pubdata'] ['password']
     grup = header['pubdata'] ['grup']
-    role = header['pubdata'] ['role']
+    #role = header['pubdata'] ['role']
+    role = grup
     kelas = header['pubdata'] ['kelas']
     enabled = header['pubdata'] ['enabled']
     individualname = urllib2.unquote(header['pubdata'] ['individualname'])
@@ -733,7 +788,9 @@ def new_groups():
     if request.method == 'POST':
         header = json.loads(urllib2.unquote(request.data).split('=')[1])
     print header['pubdata'] 
-    name = header['pubdata']['name'] 
+    name = urllib2.unquote(header['pubdata']['name'])
+    name = re.sub('[\s+]', '', name)
+    print "NAME:", name
     organization = urllib2.unquote(header['pubdata']['organization'])
     url = header['pubdata']['url'] 
     phone = header['pubdata']['phone'] 
@@ -744,17 +801,21 @@ def new_groups():
     postalcode = header['pubdata']['postalcode'] 
     email = header['pubdata']['email'] 
     country = "Indonesia"
+    kodesimpul = urllib2.unquote(header['pubdata']['kodesimpul'])
     print 'Grup Baru:', name
     if name is None:
-        print 'No Group name'
+        resp = json.dumps({'RTN': 'ERR', 'MSG': 'POST ERROR'})
+        return Response(resp, mimetype='application/json')
         abort(400)
     if Group.query.filter_by(name=name).first() is not None:
-        print 'Grup sudah ada'
+        resp = json.dumps({'RTN': 'ERR', 'MSG': 'Error, Grup sudah ada!'})
+        return Response(resp, mimetype='application/json')
         abort(400)
     if Roles.query.filter_by(name=name).first() is not None:
-        print 'Role sudah ada'
+        resp = json.dumps({'RTN': 'ERR', 'MSG': 'Error, Role sudah ada!'})
+        return Response(resp, mimetype='application/json')
         abort(400)    
-    group = Group(name=name,organization=organization,url=url,phone=phone,fax=fax,address=address,city=city,administrativearea=administrativearea,postalcode=postalcode,email=email,country=country)
+    group = Group(name=name,organization=organization,url=url,phone=phone,fax=fax,address=address,city=city,administrativearea=administrativearea,postalcode=postalcode,email=email,country=country,kodesimpul=kodesimpul)
     role = Roles(name=name)
     group.enabled =  header['pubdata']['enabled'] 
     db.session.add(group)
@@ -784,8 +845,8 @@ def new_groups():
     catalog.save(new_store)
     catalog.reload()
         # return jsonify({'RTN': 'Workspace ' + workspace + ' dibuat.'})
-    return (jsonify({'group': group.name}), 201,
-            {'Location': url_for('get_group', name=group.name, _external=True)})
+    resp = json.dumps({'RTN': 'OK', 'MSG': 'Grup, Workspace, dan Database selesai dibuat!'})
+    return Response(resp, mimetype='application/json')
 
 @app.route('/api/group/edit', methods=['POST'])
 def groupedit():
@@ -803,6 +864,7 @@ def groupedit():
     postalcode = header['pubdata']['postalcode'] 
     email = header['pubdata']['email'] 
     country = "Indonesia"
+    kodesimpul = header['pubdata']['kodesimpul'] 
     selected_group = Group.query.filter_by(name=name).first()
     selected_group.organization = organization
     selected_group.url = url
@@ -814,6 +876,7 @@ def groupedit():
     selected_group.postalcode = postalcode
     selected_group.email = email
     selected_group.country = country
+    selected_group.kodesimpul = kodesimpul
     db.session.commit()
     return jsonify({'edited': name})
 
@@ -864,7 +927,7 @@ def kugiprepare():
 @app.route('/api/group/list')
 # @auth.login_required
 def list_group():
-    list_group = User.query.with_entities(Group.name, Group.enabled, Group.organization, Group.url, Group.phone, Group.fax, Group.address, Group.city, Group.administrativearea, Group.postalcode, Group.email, Group.country)
+    list_group = User.query.with_entities(Group.name, Group.enabled, Group.organization, Group.url, Group.phone, Group.fax, Group.address, Group.city, Group.administrativearea, Group.postalcode, Group.email, Group.country, Group.kodesimpul)
     groups = GroupSchema(many=True)
     output = groups.dump(list_group)
     return json.dumps(output.data)        
@@ -939,9 +1002,13 @@ def get_wmslayers():
                     feature = georest_get(val['href'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
                     print k, feature['featureType']['name']
                     layer["layer_id"] = feature['featureType']['name']
-                    layer["layer_name"] = feature['featureType']['title']
-                    layer["layer_abstract"] = feature['featureType']['abstract']
+                    try:
+                       layer["layer_name"] = feature['featureType']['title']
+                       layer["layer_abstract"] = feature['featureType']['abstract']
+                    except:
+                       print "TEST"
                     layer["layer_aktif"] = feature['featureType']['enabled']
+                    layer["layer_advertised"] = feature['featureType']['advertised']
                     layer["layer_srs"] = feature['featureType']['srs']
                     layer["layer_minx"] = feature['featureType']['latLonBoundingBox']['minx']
                     layer["layer_maxx"] = feature['featureType']['latLonBoundingBox']['maxx']
@@ -966,9 +1033,13 @@ def get_wmslayers():
                     raster = georest_get(rasters['coverages']['coverage'][0]['href'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
                     print o, raster['coverage']['name']
                     layer["layer_id"] = raster['coverage']['name']
-                    layer["layer_name"] = raster['coverage']['title']
-                    layer["layer_abstract"] = raster['coverage']['abstract']
+                    try:
+                        layer["layer_name"] = raster['coverage']['title']
+                        layer["layer_abstract"] = raster['coverage']['abstract']
+                    except:
+                        print "Test"
                     layer["layer_aktif"] = raster['coverage']['enabled']
+                    layer["layer_advertised"] = feature['coverage']['advertised']
                     layer["layer_srs"] = raster['coverage']['srs']
                     layer["layer_minx"] = raster['coverage']['latLonBoundingBox']['minx']
                     layer["layer_maxx"] = raster['coverage']['latLonBoundingBox']['maxx']
@@ -1078,37 +1149,57 @@ def modify_layer():
     if request.method == 'POST':
         header = json.loads(urllib2.unquote(request.data).split('=')[1])
         print header['pubdata']
-        catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
-        resource = catalog.get_resource(header['pubdata']['id'])
-        resource.title = urllib2.unquote(header['pubdata']['title'])
-        resource.abstract = urllib2.unquote(header['pubdata']['abstract'])
-        resource.enabled = header['pubdata']['aktif']
-        catalog.save(resource)
-        catalog.reload()
-        if header['pubdata']['tipe'] == 'VECTOR':
-            layer = catalog.get_layer(header['pubdata']['nativename'])
-            layer._set_default_style(header['pubdata']['style'])
-            msg = 'Set vector style'
-            print header['pubdata']['nativename'], header['pubdata']['style']
-        if header['pubdata']['tipe'] == 'RASTER':
-            layer = catalog.get_layer(header['pubdata']['id'])
-            layer._set_default_style(header['pubdata']['style'])
-            msg ='Set raster style'
-        catalog.save(layer)
-        catalog.reload()
-    return jsonify({'RTN': msg})
+        try:
+            catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
+            resource = catalog.get_resource(header['pubdata']['id'])
+            resource.title = urllib2.unquote(header['pubdata']['title'])
+            resource.abstract = urllib2.unquote(header['pubdata']['abstract'])
+            resource.enabled = header['pubdata']['aktif']
+            catalog.save(resource)
+            catalog.reload()
+            if header['pubdata']['tipe'] == 'VECTOR':
+                layer = catalog.get_layer(header['pubdata']['nativename'])
+                layer._set_default_style(header['pubdata']['style'])
+                msg = 'Set vector style'
+                print header['pubdata']['nativename'], header['pubdata']['style']
+            if header['pubdata']['tipe'] == 'RASTER':
+                layer = catalog.get_layer(header['pubdata']['id'])
+                layer._set_default_style(header['pubdata']['style'])
+                msg ='Set raster style'
+            catalog.save(layer)
+            catalog.reload()
+            resp = json.dumps({'RTN': True, 'MSG': 'Informasi layer berhasil diedit'})
+        except:
+            resp = json.dumps({'RTN': False, 'MSG': 'Informasi layer gagal diedit'})    
+        return Response(resp, mimetype='application/json')        
 
 @app.route('/api/layers/delete', methods=['POST'])
 # @auth.login_required
 def delete_layer():
     if request.method == 'POST':
         header = json.loads(urllib2.unquote(request.data).split('=')[1])
-        print header['pubdata'] 
-        catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
-        layer = catalog.get_layer(header['pubdata'])
-        del_layer = catalog.delete(layer)
-        catalog.reload()
-    return jsonify({'RTN': 'Deleted!'})
+        print 'Pubdata:', header['pubdata'] 
+        try:
+            catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
+            layer = catalog.get_layer(header['pubdata']['layer'])
+            workspace = header['pubdata']['workspace']
+            del_layer = catalog.delete(layer)
+            catalog.reload()
+            if workspace == 'KUGI':
+                try:
+                    delete_metakugi(header['pubdata']['layer'])
+                    resp = json.dumps({'RTN': True, 'MSG': 'Layer berhasil dihapus'})
+                except:
+                    resp = json.dumps({'RTN': False, 'MSG': 'Layer gagal dihapus'})
+            else:
+                try:
+                    delete_metalinks(header['pubdata']['layer'])
+                    resp = json.dumps({'RTN': True, 'MSG': 'Layer berhasil dihapus'})
+                except:
+                    resp = json.dumps({'RTN': False, 'MSG': 'Layer gagal dihapus'})    
+        except:
+            resp = json.dumps({'RTN': False, 'MSG': 'Layer gagal dihapus'}) 
+        return Response(resp, mimetype='application/json')   
 
 @app.route('/api/layers/populate/<string:file>', methods=['POST'])
 # @auth.login_required
@@ -1183,7 +1274,8 @@ def upload_file():
         # check if the post request has the file part
         user = request.args.get('USER')
         grup = request.args.get('GRUP')
-        print 'User:',user, 'Grup:', grup
+        kodesimpul = request.args.get('KODESIMPUL')
+        print 'User:',user, 'Grup:', grup, 'Kode:', kodesimpul
         if 'file' not in request.files:
             print 'No file part' 
             resp = json.dumps({'MSG': 'No file part'})
@@ -1210,18 +1302,20 @@ def upload_file():
             for berkas in os.listdir(app.config['UPLOAD_FOLDER'] + '/' + filename.split('.')[0]):
                 if berkas.endswith(".tif") or berkas.endswith(".TIF") or berkas.endswith(".tiff") or berkas.endswith(".TIFF"):
                     print "Filename: " + filename.split('.')[0]
-                    populate = populateRS(filename.split('.')[0])
+                    populate = populateRS(filename.split('.')[0],kodesimpul)
                     lid = populate[2]
-                    resp = json.dumps({'RTN': filename, 'MSG': 'RASTER Upload Success! Detected projection: ' + populate[1], 'EPSG': populate[1], 'ID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'USER': user, 'GRUP': grup, 'LID': lid.lower().replace('-','_')})
+                    SEPSG = populate[1].split(':')[1]
+                    resp = json.dumps({'RTN': filename, 'MSG': 'RASTER Upload Success! Detected projection: ' + populate[1], 'EPSG': populate[1], 'SEPSG': SEPSG, 'ID': populate[2], 'TID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'USER': user, 'GRUP': grup, 'LID': lid.lower().replace('-','_')})
                     return Response(resp, mimetype='application/json')                    
                 if berkas.endswith(".shp") or berkas.endswith(".SHP"):
                     shapefile = app.config['UPLOAD_FOLDER'] + filename.split('.')[0] + '/' + filename.split('.')[0] + '.shp'
                     print "Shapefile: " + shapefile
                     if os.path.exists(shapefile):
                         print "File SHP OK"
-                        populate = populateDB(filename,grup)
+                        populate = populateDB(filename,grup,kodesimpul)
                         lid = populate[2]+'-'+populate[3]
-                        resp = json.dumps({'RTN': filename, 'MSG': 'Vector Upload Success!' + populate[0], 'EPSG': populate[1], 'ID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'USER': user, 'GRUP': grup, 'LID': lid.lower().replace('-','_')})
+                        SEPSG = populate[1].split(':')[1]
+                        resp = json.dumps({'RTN': filename, 'MSG': 'Vector Upload Success!' + populate[0], 'EPSG': populate[1], 'SEPSG': SEPSG, 'ID': populate[2], 'TID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'USER': user, 'GRUP': grup, 'LID': lid.lower().replace('-','_')})
                         return Response(resp, mimetype='application/json')
                     else:
                         resp = json.dumps({'RTN': 'ERR', 'MSG': 'No SHAPE file!'})
@@ -1247,50 +1341,57 @@ def return_feature(feature, identifier):
 def return_publish():
     if request.method == 'POST':
         header = json.loads(urllib2.unquote(request.data).split('=')[1])
-        print(header)
+        print "GS Params:", header
         print header['pubdata']['LID']
         tipe = header['pubdata']['TIPE']
         layer_id = header['pubdata']['LID']
         user = header['pubdata']['USER']
         grup = header['pubdata']['GRUP']
-        if tipe == 'RASTER':
-            catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
-            workspace = catalog.get_workspace(grup)
-            datastore = catalog.get_store(grup)
-            # sf = catalog.get_workspace(workspace)
-            ft_ext = catalog.create_coveragestore_external_geotiff(layer_id, 'file:'+app.config['RASTER_STORE']+layer_id+'.tif', workspace)
-            resource = catalog.get_resources(layer_id)
-            resource[0].title = urllib2.unquote(header['pubdata']['ID'])
-            resource[0].abstract = urllib2.unquote(header['pubdata']['ABS'])
-            resource[0].enabled = True
-            resource[0].projection = header['pubdata']['EPSG']
-            catalog.save(resource[0])
-            catalog.reload()
-        if tipe == 'VECTOR':
-            catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
-            workspace = catalog.get_workspace(grup)
-            datastore = catalog.get_store(grup)
-            publish = catalog.publish_featuretype(header['pubdata']['LID'], datastore, header['pubdata']['EPSG'])
-            publish.title = urllib2.unquote(header['pubdata']['ID'])
-            publish.abstract = urllib2.unquote(header['pubdata']['ABS'])
-            catalog.save(publish)
-            catalog.reload()
-        metalinks = Metalinks(identifier=layer_id)
-        metalinks.workspace = grup
-        db.session.add(metalinks)
-        db.session.commit()
-        wms = WebMapService(app.config['GEOSERVER_WMS_URL'], version='1.1.1')
-        bbox = wms[grup+':'+layer_id].boundingBoxWGS84       
-        print 'BBOX:', bbox
-        thumbnail = wms.getmap(layers=[header['pubdata']['LID']],srs=header['pubdata']['EPSG'],bbox=bbox,size=(300,300),format='image/png',transparent=True)
-	file = app.config['GEOSERVER_THUMBNAILS'] + layer_id+'.png'
-	print 'File:', file
-        outfile = open(file, 'wb')
-        outfile.write(thumbnail.read())
-        outfile.close()
-        resp = json.dumps({'RTN': 'ERR', 'MSG': 'Publikasi layer ke GeoServer Sukses'})
-        return Response(resp, mimetype='application/json')
-    resp = json.dumps({'RTN': 'ERR', 'MSG': 'POST ERROR'})
+        kode_epsg = 'EPSG:' + header['pubdata']['SEPSG'] 
+        try:
+            if tipe == 'RASTER':
+                print "RASTER"
+                catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
+                workspace = catalog.get_workspace(grup)
+                datastore = catalog.get_store(grup)
+                # sf = catalog.get_workspace(workspace)
+                ft_ext = catalog.create_coveragestore_external_geotiff(layer_id, 'file:'+app.config['RASTER_STORE']+layer_id+'.tif', workspace)
+                resource = catalog.get_resources(layer_id)
+                resource[0].title = urllib2.unquote(header['pubdata']['ID'])
+                resource[0].abstract = urllib2.unquote(header['pubdata']['ABS'])
+                resource[0].enabled = False
+                resource[0].advertised = True
+                resource[0].projection = kode_epsg
+                catalog.save(resource[0])
+                catalog.reload()
+            if tipe == 'VECTOR':
+                print "VECTOR"
+                catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
+                workspace = catalog.get_workspace(grup)
+                datastore = catalog.get_store(grup)
+                publish = catalog.publish_featuretype(header['pubdata']['LID'], datastore, kode_epsg)
+                publish.title = urllib2.unquote(header['pubdata']['ID'])
+                publish.abstract = urllib2.unquote(header['pubdata']['ABS'])
+                publish.enabled = False
+                publish.advertised = True
+                catalog.save(publish)
+                catalog.reload()
+            metalinks = Metalinks(identifier=layer_id)
+            metalinks.workspace = grup
+            db.session.add(metalinks)
+            db.session.commit()
+            # wms = WebMapService(app.config['GEOSERVER_WMS_URL'], version='1.1.1')
+            # bbox = wms[grup+':'+layer_id].boundingBoxWGS84       
+            # print 'BBOX:', bbox
+            # thumbnail = wms.getmap(layers=[header['pubdata']['LID']],srs=header['pubdata']['EPSG'],bbox=bbox,size=(300,300),format='image/png',transparent=True)
+            # file = app.config['GEOSERVER_THUMBNAILS'] + layer_id+'.png'
+            # print 'File:', file
+            # outfile = open(file, 'wb')
+            # outfile.write(thumbnail.read())
+            # outfile.close()
+            resp = json.dumps({'RTN': True, 'MSG': 'Publikasi layer ke GeoServer Sukses'})
+        except:
+            resp = json.dumps({'RTN': False, 'MSG': 'Publikasi layer ke GeoServer Gagal'})
     return Response(resp, mimetype='application/json')    
 
 @app.route('/api/checkworkspace', methods=['POST'])
@@ -1330,6 +1431,8 @@ def return_publishkugi():
             publish = catalog.publish_featuretype(fitur, datastore, 'EPSG:4326')
             publish.title = urllib2.unquote(fitur)
             publish.abstract = urllib2.unquote(fitur)
+            publish.enabled = False
+            publish.advertised = True
             catalog.save(publish)
             catalog.reload()
             identifier = 'KUGI:' + fitur
@@ -1338,17 +1441,19 @@ def return_publishkugi():
             metakugi.skema = skema
             metakugi.fitur = fitur
             metakugi.tipe = 'induk'
-            engine = create_engine(app.config['SQLALCHEMY_BINDS']['dbdev'])
+            engine = create_engine(app.config['SQLALCHEMY_BINDS']['dbpub'])
             result = engine.execute("select feature, dataset, fileidentifier from a_view_fileidentifier where feature='" + fitur + "' group by feature, dataset, fileidentifier")
             try:
                 for row in result:
                     anakidentifier = 'KUGI:' + fitur + '_' + row[2]
+                    print "Anak:", anakidentifier
                     anakmetakugi = Metakugi(identifier=anakidentifier)
                     anakmetakugi.workspace = 'KUGI'
                     anakmetakugi.skema = skema
                     anakmetakugi.fitur = fitur
                     anakmetakugi.tipe = 'anak'
                     db.session.add(anakmetakugi)
+                    db.session.commit()
             except:
                 resp = json.dumps({'MSG': 'ERROR'})            
             db.session.add(metakugi)
@@ -1357,6 +1462,47 @@ def return_publishkugi():
         except:
             resp = json.dumps({'RTN': 'ERR', 'MSG': 'POST ERROR'})
         return Response(resp, mimetype='application/json')
+
+@app.route('/api/layer/adv', methods=['POST'])
+def layer_adv():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+        print(header)
+        toggle = header['pubdata']['aktif']
+        try:
+            catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
+            resource = catalog.get_resource(header['pubdata']['id'])
+            resource.title = urllib2.unquote(header['pubdata']['title'])
+            resource.abstract = urllib2.unquote(header['pubdata']['abstract'])
+            resource.enabled = header['pubdata']['aktif']
+            catalog.save(resource)
+            catalog.reload()
+            if header['pubdata']['tipe'] == 'VECTOR':
+                layer = catalog.get_layer(header['pubdata']['nativename'])
+                res = layer.resource
+                if toggle == False:
+                    print "STAT1",res.enabled
+                    res.enabled = 'true'
+                else:
+                    print "STAT2",res.enabled
+                    res.enabled = 'false'
+            if header['pubdata']['tipe'] == 'RASTER':
+                layer = catalog.get_layer(header['pubdata']['id'])
+                if toggle == False:
+                    print "STAT3",res.enabled
+                    res.enabled = 'true'
+                else:
+                    print "STAT4",res.enabled
+                    res.enabled = 'false'
+            catalog.save(res)
+            catalog.reload()
+            if toggle == False:
+                resp = json.dumps({'RTN': True, 'MSG': 'Layer sukses diaktifkan'})
+            else:
+                resp = json.dumps({'RTN': True, 'MSG': 'Layer sukses di non-aktifkan'})
+        except:
+            resp = json.dumps({'RTN': False, 'MSG': 'Layer gagal diaktifkan-kan'})
+        return Response(resp, mimetype='application/json')  
 
 @app.route('/api/cswRecords')
 def record_list():
@@ -1450,7 +1596,7 @@ def pycsw_records():
 def pycsw_insert():
     if request.method == 'POST':
         header = json.loads(urllib2.unquote(request.data).split('=')[1])
-        xml_payload = urllib2.unquote(header['pubdata']['xml'])
+        #xml_payload = urllib2.unquote(header['pubdata']['xml'])
         identifier = header['pubdata']['identifier']
         workspace = header['pubdata']['workspace']
         akses = header['pubdata']['akses']
@@ -1461,10 +1607,14 @@ def pycsw_insert():
             try:
                 tipe = header['pubdata']['tipe']
                 fi = identifier
+                xmlmeta = Metakugi.query.filter_by(identifier=fi).first()
+                xml_payload = xmlmeta.xml
             except:
                 pass
         else:
             fi = workspace + ':' + identifier
+            xmlmeta = Metalinks.query.filter_by(identifier=identifier).first()
+            xml_payload = xmlmeta.xml
         mcf_template = parse_big_md(xml_payload)
         try:
             print fi
@@ -1484,6 +1634,10 @@ def pycsw_insert():
             nb = str(bbox[3])
             bboxwgs84 = wb+','+sb+','+eb+','+nb
             print bboxwgs84
+            wmslink = app.config['GEOSERVER_WMS_URL'] + "service=WMS&version=1.1.0&request=GetMap&layers=" + fi + "&styles=&bbox=" + bboxwgs84 + "&width=768&height=768&srs=EPSG:4326&format=application/openlayers"
+            wfslink = app.config['GEOSERVER_WFS_URL'] + "service=WFS&version=1.0.0&request=GetFeature&typeName=" + fi
+            print wmslink
+            print wfslink
             mcf_template = mcf_template.replace('$$rep:fileIdentifier$$', fi)
             # mcf_template = mcf_template.replace('$$rep:individualName$$', individualName)
             # mcf_template = mcf_template.replace('$$rep:organisationName$$', organisationName)
@@ -1493,17 +1647,19 @@ def pycsw_insert():
             mcf_template = mcf_template.replace('$$rep:security$$', restriction)
             mcf_template = mcf_template.replace('$$rep:secnote$$', akses)
             mcf_template = mcf_template.replace('$$rep:geoserverwms$$', app.config['GEOSERVER_WMS_URL'])
+            #mcf_template = mcf_template.replace('$$rep:geoserverwms$$', wmslink)
             mcf_template = mcf_template.replace('$$rep:geoserverwfs$$', app.config['GEOSERVER_WFS_URL'])
+            #mcf_template = mcf_template.replace('$$rep:geoserverwfs$$', wfslink)
             # mcf_template = mcf_template.replace('$$rep:wb84$$', wb)
             # mcf_template = mcf_template.replace('$$rep:sb84$$', sb)
             # mcf_template = mcf_template.replace('$$rep:eb84$$', eb)
             # mcf_template = mcf_template.replace('$$rep:nb84$$', nb)
             mcf_template = mcf_template.replace('$$rep:bboxwgs84$$', bboxwgs84)
-            rendered_xml = render_template(mcf_template, schema_local='CP-indonesia')
+            rendered_xml = render_template(mcf_template, schema_local='/opt/gs-api/app/CP-indonesia')
         except:
             msg = json.dumps({'MSG':'Metadata tidak sesuai standar!'})
         try:
-            # print xml_template
+            print rendered_xml
             csw = CatalogueServiceWeb(app.config['CSW_URL'])
             cswtrans = csw.transaction(ttype='insert', typename='gmd:MD_Metadata', record=rendered_xml)
             if workspace == 'KUGI':
@@ -1514,17 +1670,40 @@ def pycsw_insert():
                 metalinks = Metalinks.query.filter_by(identifier=header['pubdata']['identifier']).first()
                 metalinks.published = 'Y'
                 db.session.commit()
-            msg = json.dumps({'MSG':'Succeed!', 'CONTENT': rendered_xml, 'TEMPLATE': mcf_template})
+            msg = json.dumps({'MSG':'Publish servis CSW sukses!'})
         except:
-            msg = json.dumps({'MSG':'Fail!'})
+            msg = json.dumps({'MSG':'Publish servis CSW gagal!'})
         return Response(msg, mimetype='application/json')
 
-@app.route('/api/pycswRecord/delete')
+@app.route('/api/pycswRecord/delete', methods=['POST'])
 def pycswRecordDelete():
     if request.method == 'POST':
         header = json.loads(urllib2.unquote(request.data).split('=')[1])   
         print header 
-        msg = json.dumps({'MSG':'TEST!'})
+        identifier = header['pubdata']['identifier']
+        workspace = header['pubdata']['workspace']
+        try:
+            con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+            con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            cur = con.cursor()
+            if workspace == 'KUGI':
+                print "WK KUGI"
+                sql = "DELETE from metadata WHERE identifier='%s';" % (str(identifier))    
+                print sql         
+                cur.execute(sql)                
+                sqlm = "UPDATE metakugi SET published='N' WHERE identifier='%s';" % (str(identifier))
+                cur.execute(sqlm)
+            else:
+                print "WK OTHERS"
+                identifierlink = workspace + ':' + identifier
+                sql = "DELETE from metadata WHERE identifier='%s';" % (str(identifierlink))    
+                print sql         
+                cur.execute(sql)                
+                sqlm = "UPDATE metalinks SET published='N' WHERE identifier='%s';" % (str(identifier))
+                cur.execute(sqlm)                
+            msg = json.dumps({'MSG':'Berhasil unpublish servis CSW!'})
+        except:
+            msg = json.dumps({'MSG':'Gagal unpublish servis CSW!'})
     return Response(msg, mimetype='application/json')
 
 @app.route('/api/generate_wms_thumbnails')
@@ -1582,6 +1761,38 @@ def grupfitur():
         resp = json.dumps({'MSG': 'ERROR'})
     return Response(resp, mimetype='application/json')
 
+@app.route('/api/kodesimpul')
+def kodesimpul():
+    output = []
+    engine = create_engine(app.config['SQLALCHEMY_BINDS']['services'])
+    result = engine.execute("select region_cod, region_nam from kode_simpul group by region_cod, region_nam")
+    try:
+        for row in result:
+            isi = {}
+            # print row[0], row[1]
+            isi = row[0].strip() + ', ' + row[1].strip()
+            output.append(isi)
+        resp = json.dumps(output)
+    except:
+        resp = json.dumps({'MSG': 'ERROR'})
+    return Response(resp, mimetype='application/json')      
+
+@app.route('/api/kodeepsg')
+def kodeepsg():
+    output = []
+    engine = create_engine(app.config['SQLALCHEMY_BINDS']['services'])
+    result = engine.execute("select kode, keterangan from kode_epsg")
+    try:
+        for row in result:
+            isi = {}
+            # print row[0], row[1]
+            isi = row[0].strip() + ', ' + row[1].strip()
+            output.append(isi)
+        resp = json.dumps(output)
+    except:
+        resp = json.dumps({'MSG': 'ERROR'})
+    return Response(resp, mimetype='application/json')         
+
 @app.route('/api/kugiappenddata', methods=['POST'])
 def kugiappeddata():
     if request.method == 'POST':
@@ -1602,10 +1813,10 @@ def kugiappeddata():
         # submit a empty part without filename
         if file.filename == '':
             print 'No selected file' 
-            resp = json.dumps({'RTN': 'ERR', 'MSG': 'No selected file'})
+            resp = json.dumps({'RTN': 'ERR', 'MSG': 'Tidak ada berkas dipilih'})
             return Response(resp, status=405, mimetype='application/json')
         if not allowed_file(file.filename):
-            resp = json.dumps({'RTN': 'ERR', 'MSG': 'Type not allowed'})
+            resp = json.dumps({'RTN': 'ERR', 'MSG': 'Tipe tidak diperkenankan'})
             return Response(resp, status=405, mimetype='application/json')
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
@@ -1620,7 +1831,8 @@ def kugiappeddata():
                     print "Filename: " + filename.split('.')[0]
                     populate = populateRS(filename.split('.')[0])
                     lid = populate[2]
-                    resp = json.dumps({'RTN': filename, 'MSG': 'RASTER Upload Success! Detected projection: ' + populate[1], 'EPSG': populate[1], 'ID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'USER': user, 'GRUP': grup, 'LID': lid.lower().replace('-','_')})
+                    SEPSG = populate[1].split(':')[1]
+                    resp = json.dumps({'RTN': filename, 'MSG': 'RASTER Upload Success! Proyeksi terdeteksi: ' + populate[1], 'EPSG': populate[1], 'SEPSG': SEPSG, 'ID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'USER': user, 'GRUP': grup, 'LID': lid.lower().replace('-','_')})
                     return Response(resp, mimetype='application/json')                    
                 if berkas.endswith(".shp") or berkas.endswith(".SHP"):
                     shapefile = app.config['UPLOAD_FOLDER'] + filename.split('.')[0] + '/' + filename.split('.')[0] + '.shp'
@@ -1630,12 +1842,13 @@ def kugiappeddata():
                         populate = populateKUGI(filename, 'palapa_dev', skema, fitur, skala)
                         refresh_dbmetafieldview('dbdev')
                         lid = populate[2]+'-'+populate[3]
-                        resp = json.dumps({'RTN': filename, 'MSG': 'Vector Upload Success!' + populate[0], 'EPSG': populate[1], 'ID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'OGR': populate[5], 'USER': user, 'GRUP': grup, 'LID': lid.lower().replace('-','_')})
+                        SEPSG = populate[1].split(':')[1]
+                        resp = json.dumps({'RTN': filename, 'MSG': 'Vector Upload Sukses!' + populate[0], 'EPSG': populate[1], 'SEPSG': SEPSG, 'ID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'OGR': populate[5], 'USER': user, 'GRUP': grup, 'LID': lid.lower().replace('-','_')})
                         return Response(resp, mimetype='application/json')
                     else:
-                        resp = json.dumps({'RTN': 'ERR', 'MSG': 'No SHAPE file!'})
+                        resp = json.dumps({'RTN': 'ERR', 'MSG': 'Tidak ada berkas SHAPE terdeteksi!'})
                         return Response(resp, status=405, mimetype='application/json')
-        resp = json.dumps({'RTN': 'ERR', 'MSG': 'ERROR'})
+        resp = json.dumps({'RTN': 'ERR', 'MSG': 'Terjadi kesalahan'})
         return Response(resp, mimetype='application/json')
 
 @app.route('/api/refresh_dbmetaview', methods=['POST'])
@@ -1651,6 +1864,23 @@ def refresh_dbmetaview():
         except:
             resp = json.dumps({'RTN': 'Error', 'MSG': 'Terjadi Kesalahan!'})      
     return Response(resp, mimetype='application/json')         
+
+@app.route('/api/delete_spatial_records', methods=['POST'])
+def deletespatialrecords():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+        print "Header", header['pubdata'] 
+        skema = header['pubdata']['skema']
+        fitur = header['pubdata']['fitur']
+        identifier = header['pubdata']['identifier']
+        db = header['pubdata']['db']
+        try:
+            delete_spatial_records(skema,fitur,identifier,db)
+            refresh_dbmetafieldview(db)
+            resp = json.dumps({'RTN': 'Success', 'MSG': 'Data berhasi dihapus!'})
+        except:
+            resp = json.dumps({'RTN': 'Error', 'MSG': 'Terjadi Kesalahan!'})      
+    return Response(resp, mimetype='application/json')    
 
 @app.route('/api/dbdevfeature')
 def dbdevfeature():
@@ -1752,10 +1982,10 @@ def kopitable():
             execute = pgis2pgis(source_db, source_schema, source_table, dest_db, dest_schema, dest_table, identifier)
             refresh_dbmetafieldview('dbprod')
             refresh_dbmetafieldview('dbpub')
-            resp = json.dumps({'RTN': 'OK', 'MSG': 'Sukses!'})
+            resp = json.dumps({'RTN': 'OK', 'MSG': 'Kopi dataset Sukses!'})
         except:
             resp = json.dumps({'RTN': 'ERR', 'MSG': 'Gagal!'})
-    return Response(json.dumps(resp), mimetype='application/json')
+    return Response(resp, mimetype='application/json')
 
 @app.route('/api/meta/view')
 # @auth.login_required
@@ -1810,33 +2040,34 @@ def add_link():
             resp = json.dumps({'RTN': 'ERR', 'MSG': 'Type not allowed'})
             return Response(resp, status=405, mimetype='application/json')
         if file and allowed_xml(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            print "Filename: " + filename.split('.')[0]
-            xmlfile = app.config['UPLOAD_FOLDER'] + filename.split('.')[0] + '.xml'
-            print "XML: " + xmlfile
-            if os.path.exists(xmlfile):
-                print "File XML OK"
-                catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
-                xml = open(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                try:
-                    with open (xmlfile, 'r') as thefile:
-                        isixml = thefile.read()
-                    metalinks = Metalinks.query.filter_by(identifier=request.args['identifier']).first()
-                    metalinks.xml = isixml
-                    metalinks.metatick = 'Y'
-                    metalinks.akses = request.args['akses']
-                    # db.session.add(metalinks)
-                    db.session.commit()
-                    # catalog.create_style(filename.split('.')[0], xml.read()) 
-                    resp = json.dumps({'RTN': filename, 'MSG': 'Upload metadata sukses!'})
-                except:
-                    resp = json.dumps({'RTN': filename, 'MSG': 'Error, metadata dengan identifier yang sama sudah ada!'})
-                return Response(resp, mimetype='application/json')
-            else:
-                resp = json.dumps({'RTN': 'ERR', 'MSG': 'No SHAPE file!'})
-                return Response(resp, status=405, mimetype='application/json')
-        resp = json.dumps({'RTN': 'ERR', 'MSG': 'POST ERROR'})
+            try:    
+                filename = secure_filename(file.filename)
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                print "Filename: " + filename.split('.')[0]
+                xmlfile = app.config['UPLOAD_FOLDER'] + filename.split('.')[0] + '.xml'
+                print "XML: " + xmlfile
+                if os.path.exists(xmlfile):
+                    print "File XML OK"
+                    catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
+                    xml = open(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    try:
+                        with open (xmlfile, 'r') as thefile:
+                            isixml = thefile.read()
+                        metalinks = Metalinks.query.filter_by(identifier=request.args['identifier']).first()
+                        metalinks.xml = isixml
+                        metalinks.metatick = 'Y'
+                        metalinks.akses = request.args['akses']
+                        # db.session.add(metalinks)
+                        db.session.commit()
+                        # catalog.create_style(filename.split('.')[0], xml.read()) 
+                        resp = json.dumps({'RTN': True, 'MSG': 'Upload metadata sukses!'})
+                    except:
+                        resp = json.dumps({'RTN': False, 'MSG': 'Error, metadata dengan identifier yang sama sudah ada!'})
+                else:
+                    resp = json.dumps({'RTN': False, 'MSG': 'No SHAPE file!'})
+                    return Response(resp, status=405, mimetype='application/json')
+            except:
+                resp = json.dumps({'RTN': False, 'MSG': 'Upload metadata gagal!'})
         return Response(resp, mimetype='application/json')    
     # return jsonify({'RTN': 'Hello!'})
 
