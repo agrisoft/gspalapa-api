@@ -706,6 +706,7 @@ def new_user():
         header = json.loads(urllib2.unquote(request.data).split('=')[1])
     print header['pubdata'] 
     name = header['pubdata'] ['name']
+    name = re.sub('[\s+]', '', name)
     password = header['pubdata'] ['password']
     grup = header['pubdata'] ['grup']
     #role = header['pubdata'] ['role']
@@ -769,6 +770,59 @@ def delete_user():
     User.query.filter_by(name=name).delete()
     db.session.commit()
     return jsonify({'deleted': user.name})           
+
+@app.route('/api/user/edit', methods=['POST'])
+# @auth.login_required
+def edit_user():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+    print header['pubdata'] 
+    name = header['pubdata'] ['name']
+    try:
+        password = header['pubdata'] ['password']
+    except:
+        password = ''
+    grup = header['pubdata'] ['groupname']
+    #role = header['pubdata'] ['role']
+    role = grup
+    # kelas = header['pubdata'] ['kelas']
+    # enabled = header['pubdata'] ['enabled']
+    individualname = urllib2.unquote(header['pubdata'] ['individualname'])
+    try:
+        try:
+            con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+            con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            cur = con.cursor()  
+            sqlm = "UPDATE group_members SET groupname='%s' WHERE username='%s';" % (str(grup), str(name))
+            cur.execute(sqlm)
+            # selected_grup = Group_Members.query.filter_by(username=name).first
+            # selected_grup.groupname = grup
+            sqln = "UPDATE user_roles SET rolename='%s' WHERE username='%s';" % (str(grup), str(name))
+            cur.execute(sqln)            
+            # selected_role = User_Roles.query.filter_by(username=name).first
+            # selected_role = grup
+            print "A"
+            con.close()
+        except:
+            selected_grup = Group_Members(groupname=grup)
+            selected_grup.groupname = grup
+            selected_grup.username = name
+            db.session.add(selected_grup)
+            selected_role = User_Roles(rolename=grup)
+            selected_role.rolename = grup
+            selected_role.username = name  
+            db.session.add(selected_role)          
+            print "B"
+            # db.session.commit()   
+        selected_user = User.query.filter_by(name=name).first()
+        if password != '':
+            selected_user.password = 'plain:' + password
+        selected_user.individualname = individualname
+        db.session.commit()              
+        resp = json.dumps({'RTN': True, 'MSG': 'Sukses!'})
+    except:
+        resp = json.dumps({'RTN': False, 'MSG': 'Error!'})
+    return Response(resp, mimetype='application/json')
 
 @app.route('/api/userswgroup/list')
 # @auth.login_required
