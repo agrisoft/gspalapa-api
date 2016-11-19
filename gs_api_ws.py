@@ -36,44 +36,40 @@ from owslib.wms import WebMapService
 from shutil import copyfile
 from big_parser import parse_big_md
 from pygeometa import render_template
+import cfg
 
 # initialization
 app = Flask(__name__)
-app.config['SECURITY_TRACKABLE'] = True
-app.config['SECURITY_PASSWORD_HASH'] = 'pbkdf2_sha512'
-app.config['SECURITY_PASSWORD_SALT'] = 'PALAPA_ini_PALAPA_ini_PALAPA_ini_PALAPA'
-app.config['WTF_CSRF_ENABLED'] = False
-app.config['SECURITY_TOKEN_MAX_AGE'] = 365*24*60*60*1000
-app.config['SECRET_KEY'] = 'PALAPA ini PALAPA ini PALAPA ini PALAPA'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa'
-app.config['SQLALCHEMY_BINDS'] = {
-    'dbdev': 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa_dev',
-    'dbprod': 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa_prod',
-    'dbpub': 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa_pub',
-    'services': 'postgres://palapa:palapa@palapa.agrisoft-cb.com/palapa'
-}
-app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
-app.config['SQLALCHEMY_DATASTORE'] = 'postgres://palapa:palapa@palapa.agrisoft-cb.com/'
-app.config['GEOSERVER_REST_URL'] = 'http://palapa.agrisoft-cb.com:8080/geoserver/rest/'
-app.config['GEOSERVER_WMS_URL'] = 'http://palapa.agrisoft-cb.com:8080/geoserver/wms?'
-app.config['GEOSERVER_WFS_URL'] = 'http://palapa.agrisoft-cb.com:8080/geoserver/wfs?'
-app.config['GEOSERVER_USER'] = 'palapa'
-app.config['GEOSERVER_PASS'] = 'palapa'
-app.config['GEOSERVER_THUMBNAILS'] = '/var/www/html/assets/thumbnails/'
-app.config['GEOSERVER_LAYERS_PROP'] = '/var/lib/tomcat/webapps/geoserver/data/security/layers.properties'
-app.config['DATASTORE_HOST'] = 'palapa.agrisoft-cb.com'
-app.config['DATASTORE_PORT'] = '5432'
-app.config['DATASTORE_USER'] = 'palapa'
-app.config['DATASTORE_PASS'] = 'palapa'
-app.config['DATASTORE_DB'] = 'palapa'
-app.config['UPLOAD_FOLDER'] = '/mnt/uploads/'
-app.config['RASTER_FOLDER'] = '/mnt/data/'
-app.config['RASTER_STORE'] = '/mnt/store/'
-app.config['ALLOWED_EXTENSIONS'] = set(['zip','ZIP'])
-app.config['ALLOWED_VECTOR'] = set(['shp','SHP'])
-app.config['ALLOWED_RASTER'] = set(['tiff','tif','TIF','TIFF'])
-app.config['CSW_URL'] = 'http://palapa.agrisoft-cb.com/csw'
+app.config['SECURITY_TRACKABLE'] = cfg.SECURITY_TRACKABLE
+app.config['SECURITY_PASSWORD_HASH'] = cfg.SECURITY_PASSWORD_HASH
+app.config['SECURITY_PASSWORD_SALT'] = cfg.SECURITY_PASSWORD_SALT
+app.config['WTF_CSRF_ENABLED'] = cfg.WTF_CSRF_ENABLED
+app.config['SECURITY_TOKEN_MAX_AGE'] = cfg.SECURITY_TOKEN_MAX_AGE
+app.config['SECRET_KEY'] = cfg.SECRET_KEY
+app.config['SQLALCHEMY_DATABASE_URI'] = cfg.SQLALCHEMY_DATABASE_URI
+app.config['SQLALCHEMY_BINDS'] = cfg.SQLALCHEMY_BINDS
+app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = cfg.SQLALCHEMY_COMMIT_ON_TEARDOWN
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = cfg.SQLALCHEMY_TRACK_MODIFICATIONS
+app.config['SQLALCHEMY_DATASTORE'] = cfg.SQLALCHEMY_DATASTORE
+app.config['GEOSERVER_REST_URL'] = cfg.GEOSERVER_REST_URL
+app.config['GEOSERVER_WMS_URL'] = cfg.GEOSERVER_WMS_URL
+app.config['GEOSERVER_WFS_URL'] = cfg.GEOSERVER_WFS_URL
+app.config['GEOSERVER_USER'] = cfg.GEOSERVER_USER
+app.config['GEOSERVER_PASS'] = cfg.GEOSERVER_PASS
+app.config['GEOSERVER_THUMBNAILS'] = cfg.GEOSERVER_THUMBNAILS
+app.config['GEOSERVER_LAYERS_PROP'] = cfg.GEOSERVER_LAYERS_PROP
+app.config['DATASTORE_HOST'] = cfg.DATASTORE_HOST
+app.config['DATASTORE_PORT'] = cfg.DATASTORE_PORT
+app.config['DATASTORE_USER'] = cfg.DATASTORE_USER
+app.config['DATASTORE_PASS'] = cfg.DATASTORE_PASS
+app.config['DATASTORE_DB'] = cfg.DATASTORE_DB
+app.config['UPLOAD_FOLDER'] = cfg.UPLOAD_FOLDER
+app.config['RASTER_FOLDER'] = cfg.RASTER_FOLDER
+app.config['RASTER_STORE'] = cfg.RASTER_STORE
+app.config['ALLOWED_EXTENSIONS'] = cfg.ALLOWED_EXTENSIONS
+app.config['ALLOWED_VECTOR'] = cfg.ALLOWED_VECTOR
+app.config['ALLOWED_RASTER'] = cfg.ALLOWED_RASTER
+app.config['CSW_URL'] = cfg.CSW_URL
 
 
 # extensions
