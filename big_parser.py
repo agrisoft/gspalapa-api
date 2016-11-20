@@ -1,6 +1,7 @@
 from pygeometa import render_template
 import xmltodict
 import os
+import cfg
 
 # with open('1.xml') as f:
     # dictxml = xmltodict.parse(f.read())
@@ -2088,7 +2089,7 @@ def parse_big_md(input_xml):
 
 
     # print(urllib2.unquote(xml_payload))
-    with open('CP-indonesia.mcf', 'r') as file_xml_template:
+    with open(cfg.APP_BASE + 'CP-indonesia.mcf', 'r') as file_xml_template:
         xml_template = file_xml_template.read()
 
     #try:         

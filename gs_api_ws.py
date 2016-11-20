@@ -40,6 +40,7 @@ import cfg
 
 # initialization
 app = Flask(__name__)
+app.config['APP_BASE'] = cfg.APP_BASE
 app.config['SECURITY_TRACKABLE'] = cfg.SECURITY_TRACKABLE
 app.config['SECURITY_PASSWORD_HASH'] = cfg.SECURITY_PASSWORD_HASH
 app.config['SECURITY_PASSWORD_SALT'] = cfg.SECURITY_PASSWORD_SALT
@@ -135,7 +136,7 @@ def allowed_sld(filename):
 def allowed_xml(filename):
     return '.' in filename and filename.rsplit('.',)[1] in set(['xml', 'XML'])
 
-def wkt2epsg(wkt, epsg='epsg.txt', forceProj4=False):
+def wkt2epsg(wkt, epsg=app.config['APP_BASE'] + 'epsg.txt', forceProj4=False):
     code = None
     p_in = osr.SpatialReference()
     s = p_in.ImportFromWkt(wkt)
@@ -1740,7 +1741,7 @@ def pycsw_insert():
             # mcf_template = mcf_template.replace('$$rep:eb84$$', eb)
             # mcf_template = mcf_template.replace('$$rep:nb84$$', nb)
             mcf_template = mcf_template.replace('$$rep:bboxwgs84$$', bboxwgs84)
-            rendered_xml = render_template(mcf_template, schema_local='/opt/gs-api/app/CP-indonesia')
+            rendered_xml = render_template(mcf_template, schema_local=app.config['APP_BASE'] + 'CP-indonesia')
         except:
             msg = json.dumps({'MSG':'Metadata tidak sesuai standar!'})
         try:
