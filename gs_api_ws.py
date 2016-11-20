@@ -2259,7 +2259,16 @@ def crossdom():
     # print "REPLY:", reply
     proxy = json.loads(reply)
     result = proxy['content']
+    if request.method == 'POST':
+        print "POST", request.query_string
+        print "DATA", request.data
+        print "HEADER", request.headers
+        data = request.data
+        reply = proxypy.post(request.query_string,request.data,request.headers)
+        proxy = json.loads(reply)
+        result = proxy['content']
     return Response(result,status=200, mimetype='text/plain')
+
 
     # APP MAIN RUNTIME
 
