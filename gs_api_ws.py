@@ -2259,7 +2259,7 @@ def crossdom():
     # print "REPLY:", reply
     proxy = json.loads(reply)
     result = proxy['content']
-    return Response(result,status=200, mimetype='application/xml')
+    return Response(result,status=200, mimetype='text/plain')
 
     # APP MAIN RUNTIME
 
