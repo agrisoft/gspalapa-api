@@ -2256,7 +2256,10 @@ def front_layers():
 def crossdom():
     reply = proxypy.get(request.query_string)
     # print request.query_string
-    return Response(reply,status=200, mimetype='application/json')
+    # print "REPLY:", reply
+    proxy = json.loads(reply)
+    result = proxy['content']
+    return Response(result,status=200, mimetype='application/xml')
 
     # APP MAIN RUNTIME
 
