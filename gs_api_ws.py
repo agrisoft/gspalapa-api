@@ -36,6 +36,7 @@ from owslib.wms import WebMapService
 from shutil import copyfile
 from big_parser import parse_big_md
 from pygeometa import render_template
+import proxypy
 import cfg
 
 # initialization
@@ -2250,6 +2251,12 @@ def front_layers():
     front_layers = Front_layersSchema(many=True)
     output = front_layers.dump(front_layers_list)
     return json.dumps(output.data)    
+
+@app.route('/api/proxy')
+def crossdom():
+    reply = proxypy.get(request.query_string)
+    # print request.query_string
+    return Response(reply,status=200, mimetype='application/json')
 
     # APP MAIN RUNTIME
 
