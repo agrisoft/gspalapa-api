@@ -721,7 +721,7 @@ def new_user():
         abort(400)    # existing user
     user = User(name=name)
     user.hash_password(password)
-    user.enabled = enabled
+    user.enabled = 'Y'
     user.kelas = kelas
     user.individualname = individualname
     user_grup = Group_Members(groupname=grup)
