@@ -135,7 +135,7 @@ def allowed_sld(filename):
 def allowed_xml(filename):
     return '.' in filename and filename.rsplit('.',)[1] in set(['xml', 'XML'])
 
-def wkt2epsg(wkt, epsg='/opt/gs-api/app/epsg.txt', forceProj4=False):
+def wkt2epsg(wkt, epsg='epsg.txt', forceProj4=False):
     code = None
     p_in = osr.SpatialReference()
     s = p_in.ImportFromWkt(wkt)
@@ -779,47 +779,82 @@ def edit_user():
     print header['pubdata'] 
     name = header['pubdata'] ['name']
     try:
-        password = header['pubdata'] ['password']
+        password = header['pubdata']['password']
     except:
         password = ''
-    grup = header['pubdata'] ['groupname']
+    try:
+        grup = header['pubdata'] ['groupname']['value']
+    except:
+        grup = header['pubdata'] ['groupname']
     #role = header['pubdata'] ['role']
     role = grup
     # kelas = header['pubdata'] ['kelas']
     # enabled = header['pubdata'] ['enabled']
-    individualname = urllib2.unquote(header['pubdata'] ['individualname'])
+    individualname = urllib2.unquote(header['pubdata']['individualname'])
     try:
+        print "HEAD"
         try:
             con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
             con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             cur = con.cursor()  
             sqlm = "UPDATE group_members SET groupname='%s' WHERE username='%s';" % (str(grup), str(name))
+            print "UPDATE Group_Members", sqlm
             cur.execute(sqlm)
             # selected_grup = Group_Members.query.filter_by(username=name).first
             # selected_grup.groupname = grup
             sqln = "UPDATE user_roles SET rolename='%s' WHERE username='%s';" % (str(grup), str(name))
+            print "UPDATE User_Roles", sqln
             cur.execute(sqln)            
             # selected_role = User_Roles.query.filter_by(username=name).first
             # selected_role = grup
             print "A"
             con.close()
         except:
-            selected_grup = Group_Members(groupname=grup)
-            selected_grup.groupname = grup
-            selected_grup.username = name
-            db.session.add(selected_grup)
-            selected_role = User_Roles(rolename=grup)
-            selected_role.rolename = grup
-            selected_role.username = name  
-            db.session.add(selected_role)          
+            con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+            con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            cur = con.cursor()  
+            sqlm = "INSERT INTO group_members (groupname, username) VALUES ('%s', '%s');" % (str(grup), str(name))
+            print "INSERT Group_Members", sqlm
+            cur.execute(sqlm)
+            # selected_grup = Group_Members.query.filter_by(username=name).first
+            # selected_grup.groupname = grup
+            sqln = "INSERT INTO user_roles (rolename, username) VALUES ('%s', '%s');" % (str(grup), str(name))
+            print "INSERT User_Roles", sqln
+            cur.execute(sqln)            
+            # selected_role = User_Roles.query.filter_by(username=name).first
+            # selected_role = grup
             print "B"
-            # db.session.commit()   
-        selected_user = User.query.filter_by(name=name).first()
-        if password != '':
-            selected_user.password = 'plain:' + password
-        selected_user.individualname = individualname
-        db.session.commit()              
-        resp = json.dumps({'RTN': True, 'MSG': 'Sukses!'})
+            con.close()
+            # selected_grup = Group_Members(groupname=grup)
+            # selected_grup.groupname = grup
+            # selected_grup.username = name
+            # db.session.add(selected_grup)
+            # selected_role = User_Roles(rolename=grup)
+            # selected_role.rolename = grup
+            # selected_role.username = name  
+            # db.session.add(selected_role)          
+            # print "B"
+            # db.session.commit()  
+        try:
+            if password != '':
+                p_password = 'plain:' + password 
+            con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+            con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            cur = con.cursor()  
+            sqlm = "UPDATE users SET password='%s' WHERE name='%s';" % (str(p_password), str(name))
+            print "UPDATE password", sqlm
+            cur.execute(sqlm)            
+            con.close()
+            print "C"
+            resp = json.dumps({'RTN': True, 'MSG': 'Sukses!'})
+        except:
+            resp = json.dumps({'RTN': False, 'MSG': 'Error!'})
+        # selected_user = User.query.filter_by(name=name).first()
+        # if password != '':
+        #     selected_user.password = 'plain:' + password
+        # selected_user.individualname = individualname
+        # db.session.commit()              
+        # resp = json.dumps({'RTN': True, 'MSG': 'Sukses!'})
     except:
         resp = json.dumps({'RTN': False, 'MSG': 'Error!'})
     return Response(resp, mimetype='application/json')
