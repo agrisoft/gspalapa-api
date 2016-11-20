@@ -567,6 +567,17 @@ class KodeEPSG_RolesSchema(ma.ModelSchema):
     class Meta:
         model = KodeEPSG          
 
+class Front_layers(db.Model):
+    __tablename__ = 'front_layers'
+    id = db.Column(db.BigInteger, primary_key=True)
+    layer_nativename = db.Column(db.String(256))
+    layer_title =  db.Column(db.String(256))
+    aktif = db.Column(db.Boolean)
+
+class Front_layersSchema(ma.ModelSchema):
+    class Meta:
+        model = Front_layers   
+
 def identity(payload):
     print 'Identity:', user
     return user
@@ -2068,9 +2079,9 @@ def kopitable():
             execute = pgis2pgis(source_db, source_schema, source_table, dest_db, dest_schema, dest_table, identifier)
             refresh_dbmetafieldview('dbprod')
             refresh_dbmetafieldview('dbpub')
-            resp = json.dumps({'RTN': 'OK', 'MSG': 'Kopi dataset Sukses!'})
+            resp = json.dumps({'RTN': 'OK', 'MSG': 'Migrasi dataset Sukses!'})
         except:
-            resp = json.dumps({'RTN': 'ERR', 'MSG': 'Gagal!'})
+            resp = json.dumps({'RTN': 'ERR', 'MSG': 'Migrasi dataset Gagal!'})
     return Response(resp, mimetype='application/json')
 
 @app.route('/api/meta/view')
@@ -2208,6 +2219,37 @@ def add_kugilink():
         resp = json.dumps({'RTN': 'ERR', 'MSG': 'POST ERROR'})
         return Response(resp, mimetype='application/json')    
     # return jsonify({'RTN': 'Hello!'})
+
+@app.route('/api/front_layers/add', methods=['POST'])
+def add_front_layers():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('=')[1])   
+        print "Header:", header['pubdata']
+        content = header['pubdata']
+        try:
+            Front_layers.query.delete()
+            for row in content:
+                # print row
+                print row['id'],row['layer_nativename'],row['layer_title'],row['aktif']
+                if row['pilih'] == True:
+                    front_layer_row = Front_layers(id=row['id'])
+                    front_layer_row.layer_nativename = row['layer_nativename']
+                    front_layer_row.layer_title = row['layer_title']
+                    front_layer_row.aktif = row['aktif']
+                    db.session.add(front_layer_row)
+                    db.session.commit()
+                resp = json.dumps({'RTN': True, 'MSG': 'Sukses'})
+        except:
+            resp = json.dumps({'RTN': False, 'MSG': 'Gagal'})
+        # resp = json.dumps({'RTN': False, 'MSG': 'TEST'})
+        return Response(resp, mimetype='application/json')           
+
+@app.route('/api/front_layers')
+def front_layers():
+    front_layers_list = Front_layers.query.with_entities(Front_layers.id, Front_layers.layer_nativename, Front_layers.layer_title, Front_layers.aktif)
+    front_layers = Front_layersSchema(many=True)
+    output = front_layers.dump(front_layers_list)
+    return json.dumps(output.data)    
 
     # APP MAIN RUNTIME
 
