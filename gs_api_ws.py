@@ -2252,7 +2252,7 @@ def front_layers():
     output = front_layers.dump(front_layers_list)
     return json.dumps(output.data)    
 
-@app.route('/api/proxy')
+@app.route('/api/proxy', methods=['POST','GET'])
 def crossdom():
     reply = proxypy.get(request.query_string)
     # print request.query_string
