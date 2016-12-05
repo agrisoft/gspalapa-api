@@ -36,6 +36,8 @@ from owslib.wms import WebMapService
 from shutil import copyfile
 from big_parser import parse_big_md
 from pygeometa import render_template
+from dbfread import DBF
+import StringIO
 import proxypy
 import cfg
 
@@ -68,6 +70,8 @@ app.config['DATASTORE_DB'] = cfg.DATASTORE_DB
 app.config['UPLOAD_FOLDER'] = cfg.UPLOAD_FOLDER
 app.config['RASTER_FOLDER'] = cfg.RASTER_FOLDER
 app.config['RASTER_STORE'] = cfg.RASTER_STORE
+app.config['DOCUMENTS_FOLDER'] = cfg.DOCUMENTS_FOLDER
+app.config['DOWNLOADS_FOLDER'] = cfg.DOWNLOADS_FOLDER
 app.config['ALLOWED_EXTENSIONS'] = cfg.ALLOWED_EXTENSIONS
 app.config['ALLOWED_VECTOR'] = cfg.ALLOWED_VECTOR
 app.config['ALLOWED_RASTER'] = cfg.ALLOWED_RASTER
@@ -136,6 +140,9 @@ def allowed_sld(filename):
 
 def allowed_xml(filename):
     return '.' in filename and filename.rsplit('.',)[1] in set(['xml', 'XML'])
+
+def allowed_docs(filename):
+    return '.' in filename and filename.rsplit('.',)[1] in set(['docx', 'DOCX', 'doc', 'DOC', 'txt', 'TXT', 'xlsx', 'XLSX', 'xls', 'XLS', 'pdf', 'PDF'])
 
 def wkt2epsg(wkt, epsg=app.config['APP_BASE'] + 'epsg.txt', forceProj4=False):
     code = None
@@ -267,7 +274,8 @@ def populateKUGI(source_shp, database, schema, table, scale):
     layer = shape_file.GetLayer()
     crs = layer.GetSpatialRef()
     tipe = 'VECTOR'
-    fitur = schema + '.' + table + '_' + scale
+    fitur = schema + '.' + table
+    # fitur = schema + '.' + table + '_' + scale
     print fitur
     try:
         EPSG = wkt2epsg(crs.ExportToWkt())
@@ -295,6 +303,19 @@ def populateKUGI(source_shp, database, schema, table, scale):
             msg = " Terjadi kegagalan import!"
         return msg, EPSG, source_shp.split('.')[0], str(uuided), tipe, ogro
 
+def save_table(db, skema, fitur, identifier):
+    print db, identifier, skema, fitur
+    pg_conn = "PG:host=" + app.config['DATASTORE_HOST'] + " port=" + app.config['DATASTORE_PORT'] + " user=" + app.config['DATASTORE_USER'] + " dbname=" + db + " password=" + app.config['DATASTORE_PASS']
+    print pg_conn
+    sql = "SELECT * from %s.%s WHERE metadata='%s'" % (skema, fitur, identifier)
+    print sql
+    try:
+        ogro = ogr2ogr.main(["", "-f", "GML", app.config['DOWNLOADS_FOLDER'] + fitur + '_' + identifier + '.gml', pg_conn, "-sql", sql])
+        msg = app.config['DOWNLOADS_FOLDER'] + fitur + '_' + identifier + '.gml'
+    except:
+        msg = " Error"
+    return msg
+
 def populateRS(source_ras,kodesimpul):
     print source_ras
     catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
@@ -313,7 +334,16 @@ def populateRS(source_ras,kodesimpul):
     print 'Source: ' + source_ras
     return msg, EPSG, layer_id, str(uuided),tipe
 
+def get_iden_unik(filedbf):
+    table = DBF(filedbf)
+    list_iden = []
+    for record in table:
+        list_iden.append(record['METADATA'])
+    list_iden_unik = list(set(list_iden))
+    return list_iden_unik
+
 def refresh_dbmetafieldview(database):
+    db = database
     # engine = create_engine(app.config['SQLALCHEMY_BINDS'][database])
     if database == 'dbdev':
         db = 'palapa_dev'
@@ -326,6 +356,7 @@ def refresh_dbmetafieldview(database):
     cur = con.cursor()
     sql = "SELECT public._a_cekmetadata()"
     cur.execute(sql)
+    con.close()
     msg = "Refreshed" 
     # print "DB:", database
     # try:
@@ -340,6 +371,7 @@ def refresh_dbmetafieldview(database):
     return msg
 
 def delete_spatial_records(skema,fitur,identifier,database):
+    db = database
     if database == 'dbdev':
         db = 'palapa_dev'
     if database == 'dbprod':
@@ -352,6 +384,7 @@ def delete_spatial_records(skema,fitur,identifier,database):
     sql = "DELETE from %s.%s WHERE metadata='%s';" % (str(skema), str(fitur), str(identifier))    
     print sql
     cur.execute(sql)
+    con.close()
     msg = "Deleted" 
     return msg
 
@@ -362,6 +395,7 @@ def delete_metakugi(fitur):
     sql = "DELETE from metakugi WHERE fitur='%s';" % (str(fitur))    
     print sql
     cur.execute(sql)
+    con.close()
     msg = "Deleted" 
     return msg
 
@@ -372,6 +406,7 @@ def delete_metalinks(fitur):
     sql = "DELETE from metalinks WHERE identifier='%s';" % (str(fitur))    
     print sql
     cur.execute(sql)
+    con.close()
     msg = "Deleted" 
     return msg    
 
@@ -550,6 +585,38 @@ class MetakugiSchema(ma.ModelSchema):
     class Meta:
         model = Metakugi            
 
+class Metakugi_dev(db.Model):
+    __tablename__ = 'metakugi_dev'
+    identifier = db.Column(db.String(128), primary_key=True)
+    skema = db.Column(db.String(128))
+    fitur = db.Column(db.String(128))
+    workspace = db.Column(db.String(128))
+    metatick =  db.Column(db.String(1))
+    akses = db.Column(db.String(32))
+    published = db.Column(db.String(1))
+    xml = db.Column(db.Text)
+    tipe = db.Column(db.String(16))
+
+class Metakugi_devSchema(ma.ModelSchema):
+    class Meta:
+        model = Metakugi_dev     
+
+class Metakugi_prod(db.Model):
+    __tablename__ = 'metakugi_prod'
+    identifier = db.Column(db.String(128), primary_key=True)
+    skema = db.Column(db.String(128))
+    fitur = db.Column(db.String(128))
+    workspace = db.Column(db.String(128))
+    metatick =  db.Column(db.String(1))
+    akses = db.Column(db.String(32))
+    published = db.Column(db.String(1))
+    xml = db.Column(db.Text)
+    tipe = db.Column(db.String(16))
+
+class Metakugi_prodSchema(ma.ModelSchema):
+    class Meta:
+        model = Metakugi_prod             
+
 class Sistem(db.Model):
     __tablename__ = 'sistem'
     key = db.Column(db.String(128), primary_key=True)
@@ -578,6 +645,19 @@ class Front_layers(db.Model):
 class Front_layersSchema(ma.ModelSchema):
     class Meta:
         model = Front_layers   
+
+class Grup_fitur(db.Model):
+    __tablename__ = 'group_features'
+    groupname = db.Column(db.String(128), primary_key=True)
+    fitur = db.Column(db.String(256), primary_key=True)
+    skema = db.Column(db.String(128))
+    skala = db.Column(db.String(16))
+
+class Grup_fiturSchema(ma.ModelSchema):
+    class Meta:
+        model = Grup_fitur
+
+# FUNCTIONS
 
 def identity(payload):
     print 'Identity:', user
@@ -686,7 +766,7 @@ def sisteminfoedit():
         r_url.value = url
         r_kodesimpul.value = kodesimpul
         db.session.commit()
-        return jsonify({'Result': True, 'MSG':'OK!'})
+        return jsonify({'Result': True, 'MSG':'Data sukses disimpan!'})
 
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
 def login():
@@ -746,8 +826,16 @@ def new_user():
     db.session.add(user_grup)
     db.session.add(user)
     db.session.commit()
-    return (jsonify({'name': user.name}), 201,
-            {'Location': url_for('get_user', name=user.name, _external=True)})
+    con = psycopg2.connect(dbname=app.config['DATASTORE_DB'], user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+    con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = con.cursor()  
+    sql_user = "CREATE USER \"%s\" WITH PASSWORD '%s';" % (str(name), str(password))
+    cur.execute(sql_user)
+    sql_grant = "GRANT \"%s\" to \"%s\";" % ('ROLE_'+str(grup), str(name))
+    cur.execute(sql_grant)
+    con.close()    
+    resp = json.dumps({'RTN': True, 'MSG': 'Tambah pengguna berhasil!'})
+    return Response(resp, mimetype='application/json')
 
 @app.route('/api/users/<string:name>')
 def get_user(name):
@@ -782,7 +870,14 @@ def delete_user():
     user = User(name=name)
     User.query.filter_by(name=name).delete()
     db.session.commit()
-    return jsonify({'deleted': user.name})           
+    con = psycopg2.connect(dbname=app.config['DATASTORE_DB'], user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+    con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = con.cursor()  
+    sql_user = "DROP USER \"%s\";" % str(name)
+    cur.execute(sql_user)    
+    con.close()    
+    resp = json.dumps({'RTN': True, 'MSG': 'User dihapus!'})
+    return Response(resp, mimetype='application/json')            
 
 @app.route('/api/user/edit', methods=['POST'])
 # @auth.login_required
@@ -931,9 +1026,20 @@ def new_groups():
     con = psycopg2.connect(dbname=app.config['DATASTORE_DB'], user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
     con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = con.cursor()
-    sql ="CREATE DATABASE \"%s\" ENCODING 'UTF-8' TEMPLATE template_postgis_wraster owner \"%s\";" % (str(name), str(app.config['DATASTORE_USER']))
+    sql ="CREATE DATABASE \"%s\" ENCODING 'UTF-8' TEMPLATE template_postgis_wraster OWNER \"%s\";" % (str(name), str(app.config['DATASTORE_USER']))
     cur.execute(sql)
-    print sql
+    sql_role = "CREATE ROLE \"%s\";" % ('ROLE_'+str(name))
+    cur.execute(sql_role)
+    sql_grant = "GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\";"  % (str(name),'ROLE_'+str(name))
+    cur.execute(sql_grant)
+    # KUGI TEMPLATES
+    sql_kugi ="CREATE DATABASE \"%s\" ENCODING 'UTF-8' TEMPLATE template_palapa OWNER \"%s\";" % (str(name) + '_DEV', str(app.config['DATASTORE_USER']))
+    cur.execute(sql_kugi)
+    sql_grant_kugi = "GRANT ALL PRIVILEGES ON DATABASE \"%s\" TO \"%s\";"  % (str(name) + '_DEV','ROLE_'+str(name))
+    cur.execute(sql_grant_kugi)    
+    # sql_grant_kugiprod = "GRANT SELECT ON ALL TABLES IN SCHEMA public TO xxx; \"%s\" TO \"%s\";"  % ('palapa_prod'','ROLE_'+str(name))
+    # cur.execute(sql_grant_kugiprod)       
+    con.close()
     # Create Store
     new_store = catalog.create_datastore(name,name)
     new_store.connection_parameters.update(host=app.config['DATASTORE_HOST'], port=app.config['DATASTORE_PORT'], database=name,user=app.config['DATASTORE_USER'], passwd=app.config['DATASTORE_PASS'], dbtype='postgis', schema='public')
@@ -1859,6 +1965,32 @@ def grupfitur():
         resp = json.dumps({'MSG': 'ERROR'})
     return Response(resp, mimetype='application/json')
 
+@app.route('/api/grupfitur/simpan/<string:grup>', methods=['POST'])
+def grupfitur_simpan(grup):
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+        print "Header", header['pubdata']
+        rmfitur = Grup_fitur.query.filter_by(groupname=grup).delete()
+        db.session.commit()
+        for result in header['pubdata']:
+            print result['skema'], result['fitur'], result['groupname'], result['skala']
+            gf = Grup_fitur()
+            gf.groupname = result['groupname']
+            gf.fitur = result['fitur']
+            gf.skema = result['skema']
+            gf.skala = result['skala']
+            db.session.add(gf)
+        db.session.commit()
+    resp = json.dumps({'MSG': 'Sukses disimpan!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/grupfitur/<string:grup>')
+def grupfitur_q(grup):
+    res = Grup_fitur.query.filter_by(groupname=grup).with_entities(Grup_fitur.groupname, Grup_fitur.fitur, Grup_fitur.skema, Grup_fitur.skala)
+    result = Grup_fiturSchema(many=True)
+    output = result.dump(res)
+    return json.dumps(output.data)    
+
 @app.route('/api/kodesimpul')
 def kodesimpul():
     output = []
@@ -1875,7 +2007,7 @@ def kodesimpul():
         resp = json.dumps({'MSG': 'ERROR'})
     return Response(resp, mimetype='application/json')      
 
-@app.route('/api/kodeepsg')
+@app.route('/api/kodeepsg', methods=['GET'])
 def kodeepsg():
     output = []
     engine = create_engine(app.config['SQLALCHEMY_BINDS']['services'])
@@ -1889,7 +2021,7 @@ def kodeepsg():
         resp = json.dumps(output)
     except:
         resp = json.dumps({'MSG': 'ERROR'})
-    return Response(resp, mimetype='application/json')         
+    return Response(stream_with_context(resp), mimetype='application/json')         
 
 @app.route('/api/kugiappenddata', methods=['POST'])
 def kugiappeddata():
@@ -1934,14 +2066,36 @@ def kugiappeddata():
                     return Response(resp, mimetype='application/json')                    
                 if berkas.endswith(".shp") or berkas.endswith(".SHP"):
                     shapefile = app.config['UPLOAD_FOLDER'] + filename.split('.')[0] + '/' + filename.split('.')[0] + '.shp'
+                    dbf = app.config['UPLOAD_FOLDER'] + filename.split('.')[0] + '/' + filename.split('.')[0] + '.dbf'
+                    res_iden = get_iden_unik(dbf)
+                    print "IDEN:", res_iden
                     print "Shapefile: " + shapefile
                     if os.path.exists(shapefile):
                         print "File SHP OK"
-                        populate = populateKUGI(filename, 'palapa_dev', skema, fitur, skala)
-                        refresh_dbmetafieldview('dbdev')
+                        populate = populateKUGI(filename, grup + '_DEV', skema, fitur, skala)
+                        refresh_dbmetafieldview(grup + '_DEV')
                         lid = populate[2]+'-'+populate[3]
                         SEPSG = populate[1].split(':')[1]
-                        resp = json.dumps({'RTN': filename, 'MSG': 'Vector Upload Sukses!' + populate[0], 'EPSG': populate[1], 'SEPSG': SEPSG, 'ID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'OGR': populate[5], 'USER': user, 'GRUP': grup, 'LID': lid.lower().replace('-','_')})
+                        resp = json.dumps({'RTN': filename, 'MSG': 'Vector Upload Sukses!' + populate[0], 'EPSG': populate[1], 'SEPSG': SEPSG, 'ID': populate[2], 'UUID': populate[3], 'TIPE': populate[4], 'OGR': populate[5], 'USER': user, 'GRUP': grup, 'IDEN': res_iden, 'LID': lid.lower().replace('-','_')})
+                        for iden in res_iden:
+                            try:
+                                if Metakugi_dev.query.filter_by(identifier=iden).first():
+                                    pass
+                                else:
+                                    metakugi_dev = Metakugi_dev(identifier=iden)
+                                    metakugi_dev.skema = skema
+                                    metakugi_dev.fitur = fitur
+                                    metakugi_dev.workspace = grup
+                                    # metakugi_dev.xml = isixml
+                                    # metakugi_dev.metatick = 'Y'
+                                    # metakugi_dev.akses = request.args['akses']
+                                    db.session.add(metakugi_dev)
+                            except:
+                                pass
+                        try:
+                            db.session.commit()
+                        except:
+                            pass                        
                         return Response(resp, mimetype='application/json')
                     else:
                         resp = json.dumps({'RTN': 'ERR', 'MSG': 'Tidak ada berkas SHAPE terdeteksi!'})
@@ -1972,6 +2126,9 @@ def deletespatialrecords():
         fitur = header['pubdata']['fitur']
         identifier = header['pubdata']['identifier']
         db = header['pubdata']['db']
+        grup = header['pubdata']['grup']
+        if db == 'dbdev':
+            db = grup + '_DEV'
         try:
             delete_spatial_records(skema,fitur,identifier,db)
             refresh_dbmetafieldview(db)
@@ -1980,12 +2137,35 @@ def deletespatialrecords():
             resp = json.dumps({'RTN': 'Error', 'MSG': 'Terjadi Kesalahan!'})      
     return Response(resp, mimetype='application/json')    
 
+@app.route('/api/gruponlyfitur/<string:grup>')
+def gruponlyfitur(grup):
+    output = {}
+    engine = create_engine(app.config['SQLALCHEMY_BINDS']['services'])
+    result_skala = engine.execute("select skala from group_features where groupname='%s' group by skala" % str(grup))
+    for skala in result_skala:
+        print "SKALA", skala
+        sql = "select skema from group_features where skala = '%s' and groupname = '%s' group by skema" % (str(skala[0]), str(grup))
+        print sql
+        result_kategori = engine.execute(sql)
+        # print skala[0]
+        output[skala[0]] = {}
+        for kategori in result_kategori:
+            # print "\t", kategori[0]
+            sql ="select fitur from group_features where skala = '%s' and skema = '%s' and groupname = '%s' group by fitur" % (str(skala[0]), str(kategori[0]), str(grup))
+            result_fitur = engine.execute(sql)
+            output[skala[0]][kategori[0]] = []
+            for fitur in result_fitur:
+                # print "\t\t", fitur[0]
+                output[skala[0]][kategori[0]].append(fitur[0])
+    return Response(json.dumps(output), mimetype='application/json')
+
 @app.route('/api/dbdevfeature')
 def dbdevfeature():
     output = {}
     engine = create_engine(app.config['SQLALCHEMY_BINDS']['dbdev'])
     result_skala = engine.execute("select skala from a_view_feature group by skala")
     for skala in result_skala:
+        print "SKALA", skala
         result_kategori = engine.execute("select dataset from a_view_feature where skala = %s group by dataset" , skala)
         # print skala[0]
         output[skala[0]] = {}
@@ -1997,6 +2177,16 @@ def dbdevfeature():
             for fitur in result_fitur:
                 # print "\t\t", fitur[0]
                 output[skala[0]][kategori[0]].append(fitur[0])
+    return Response(json.dumps(output), mimetype='application/json')
+
+@app.route('/api/dbkugilist/<string:kategori>')
+def dbkugilist(kategori):
+    output = []
+    engine = create_engine(app.config['SQLALCHEMY_BINDS']['dbdev'])
+    result_sql = engine.execute("select feature from a_view_feature where dataset=%s", kategori)
+    for fitur in result_sql:
+        print "Fitur:", fitur[0]
+        output.append(fitur[0])
     return Response(json.dumps(output), mimetype='application/json')
 
 @app.route('/api/dbdevisifeature')
@@ -2020,6 +2210,28 @@ def dbdevisifeature():
         outputs.append(output)
         output = {}
     return Response(json.dumps(outputs), mimetype='application/json')
+
+@app.route('/api/dbdevisifeature/<string:grup>')
+def dbdevisifeature_grup(grup):
+    output = {}
+    outputs = []
+    engine = create_engine(app.config['SQLALCHEMY_DATASTORE'] + '%s_DEV' % str(grup))
+    result = engine.execute("select * from a_view_fileidentifier")    
+    for row in result:
+        output['id'] = row['id']
+        output['feature'] = row['feature'].strip()
+        output['iddataset'] = row['iddataset']
+        output['idkategori'] = row['idkategori']
+        output['idskala'] = row['idskala']
+        output['dataset'] = row['dataset']
+        output['kategori'] = row['kategori']
+        output['tipe'] = row['tipe']
+        output['alias'] = row['alias']
+        output['skala'] = row['skala']
+        output['identifier'] = row['fileidentifier']
+        outputs.append(output)
+        output = {}
+    return Response(json.dumps(outputs), mimetype='application/json')    
 
 @app.route('/api/dbprodisifeature')
 def dbprodisifeature():
@@ -2080,10 +2292,51 @@ def kopitable():
             execute = pgis2pgis(source_db, source_schema, source_table, dest_db, dest_schema, dest_table, identifier)
             refresh_dbmetafieldview('dbprod')
             refresh_dbmetafieldview('dbpub')
+            try:
+                con = psycopg2.connect(dbname=app.config['DATASTORE_DB'], user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+                con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+                cur = con.cursor()  
+                if dest_db == 'palapa_prod':
+                    if Metakugi_prod.query.filter_by(identifier=identifier).first():
+                        pass
+                    else:
+                        sql_user = "INSERT INTO metakugi_prod (SELECT * FROM metakugi_dev WHERE identifier='%s');" % str(identifier)
+                        cur.execute(sql_user)   
+                if dest_db == 'palapa_pub':
+                    if Metakugi.query.filter_by(identifier=identifier).first():
+                        pass
+                    else:
+                        sql_user = "INSERT INTO metakugi (SELECT * FROM metakugi_prod WHERE identifier='%s');" % str(identifier)
+                        cur.execute(sql_user)   
+                con.close()
+            except:
+                pass
             resp = json.dumps({'RTN': 'OK', 'MSG': 'Migrasi dataset Sukses!'})
         except:
             resp = json.dumps({'RTN': 'ERR', 'MSG': 'Migrasi dataset Gagal!'})
     return Response(resp, mimetype='application/json')
+
+@app.route('/api/cekmeta/<string:table>/<string:identifier>')
+def cekmeta(table, identifier):
+    engine = create_engine(app.config['SQLALCHEMY_BINDS']['services'])
+    sql = "SELECT identifier FROM %s WHERE identifier='%s'" % (table, identifier)
+    result = engine.execute(sql)
+    if result.rowcount > 0:
+        resp = json.dumps({ 'MSG': True })
+    else:
+        resp = json.dumps({ 'MSG': False })
+    return Response(resp, mimetype='application/json')       
+
+@app.route('/api/cekmeta/<string:table>')
+def cekmeta_table(table):
+    output = []
+    engine = create_engine(app.config['SQLALCHEMY_BINDS']['services'])
+    sql = "SELECT identifier FROM %s" % (table)
+    result = engine.execute(sql)
+    for row in result:
+        output.append(row[0])
+    resp = json.dumps(output)
+    return Response(resp, mimetype='application/json')           
 
 @app.route('/api/meta/view')
 # @auth.login_required
@@ -2098,6 +2351,20 @@ def metakugi_view():
     metalink = Metakugi.query.filter_by(identifier=request.args['identifier']).first()
     xml = metalink.xml
     return Response(xml, mimetype='application/xml')        
+
+@app.route('/api/metakugi_dev/view')
+# @auth.login_required
+def metakugi_dev_view():
+    metalink = Metakugi_dev.query.filter_by(identifier=request.args['identifier']).first()
+    xml = metalink.xml
+    return Response(xml, mimetype='application/xml')     
+
+@app.route('/api/metakugi_prod/view')
+# @auth.login_required
+def metakugi_prod_view():
+    metalink = Metakugi_prod.query.filter_by(identifier=request.args['identifier']).first()
+    xml = metalink.xml
+    return Response(xml, mimetype='application/xml')         
 
 @app.route('/api/meta/list')
 # @auth.login_required
@@ -2198,15 +2465,15 @@ def add_kugilink():
             print "XML: " + xmlfile
             if os.path.exists(xmlfile):
                 print "File XML OK"
-                catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
+                # catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
                 xml = open(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                 try:
                     with open (xmlfile, 'r') as thefile:
                         isixml = thefile.read()
-                    metakugi = Metakugi.query.filter_by(identifier=request.args['identifier']).first()
-                    metakugi.xml = isixml
-                    metakugi.metatick = 'Y'
-                    metakugi.akses = request.args['akses']
+                    metakugi_dev = Metakugi_dev.query.filter_by(identifier=request.args['identifier']).first()
+                    metakugi_dev.xml = isixml
+                    metakugi_dev.metatick = 'Y'
+                    metakugi_dev.akses = request.args['akses']
                     # db.session.add(metalinks)
                     db.session.commit()
                     # catalog.create_style(filename.split('.')[0], xml.read()) 
@@ -2239,9 +2506,9 @@ def add_front_layers():
                     front_layer_row.aktif = row['aktif']
                     db.session.add(front_layer_row)
                     db.session.commit()
-                resp = json.dumps({'RTN': True, 'MSG': 'Sukses'})
+                resp = json.dumps({'RTN': True, 'MSG': 'Sukses disimpan'})
         except:
-            resp = json.dumps({'RTN': False, 'MSG': 'Gagal'})
+            resp = json.dumps({'RTN': False, 'MSG': 'Gagal disimpan!'})
         # resp = json.dumps({'RTN': False, 'MSG': 'TEST'})
         return Response(resp, mimetype='application/json')           
 
@@ -2250,7 +2517,17 @@ def front_layers():
     front_layers_list = Front_layers.query.with_entities(Front_layers.id, Front_layers.layer_nativename, Front_layers.layer_title, Front_layers.aktif)
     front_layers = Front_layersSchema(many=True)
     output = front_layers.dump(front_layers_list)
-    return json.dumps(output.data)    
+    return Response(json.dumps(output.data), mimetype='application/json')   
+
+@app.route('/api/savetable/<string:db>/<string:skema>/<string:fitur>/<string:identifier>')
+def savetable(db, skema, fitur, identifier):
+    link = save_table(db, skema, fitur, identifier)
+    filename = fitur + '_' + identifier + '.gml'
+    with open(link, 'r') as file:
+        gml = file.read()
+    response = Response(stream_with_context(gml), mimetype='application/gml+xml')
+    response.headers['Content-Disposition'] = 'attachment; filename=%s' % filename
+    return response
 
 @app.route('/api/proxy', methods=['POST','GET'])
 def crossdom():
@@ -2269,10 +2546,65 @@ def crossdom():
         result = proxy['content']
     return Response(result,status=200, mimetype='text/plain')
 
+@app.route('/api/docs/link', methods=['POST'])
+# @auth.login_required
+def docs_link():
+    if request.method == 'POST':
+        # check if the post request has the file part
+        if 'file' not in request.files:
+            print 'No file part' 
+            resp = json.dumps({'MSG': 'No file part'})
+            return Response(resp, mimetype='application/json')
+        file = request.files['file']
+        print file
+        # print 'Param:', request.args['identifier']
+        # if user does not select file, browser also
+        # submit a empty part without filename
+        if file.filename == '':
+            print 'No selected file' 
+            resp = json.dumps({'RTN': 'ERR', 'MSG': 'No selected file'})
+            return Response(resp, status=405, mimetype='application/json')
+        if not allowed_docs(file.filename):
+            resp = json.dumps({'RTN': 'ERR', 'MSG': 'Type not allowed'})
+            return Response(resp, status=405, mimetype='application/json')
+        if file and allowed_docs(file.filename):
+            print "F:", secure_filename(file.filename)
+            try:    
+                filename = secure_filename(file.filename)
+                file.save(os.path.join(app.config['DOCUMENTS_FOLDER'], filename))
+                print "Filename: " + filename.split('.')[0]
+                docsfile = app.config['DOCUMENTS_FOLDER'] + filename
+                print "docs: " + docsfile
+                if os.path.exists(docsfile):
+                    print "File DOCS OK"
+                    # catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
+                    # xml = open(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    # try:
+                    #     with open (docsfile, 'r') as thefile:
+                    #         isixml = thefile.read()
+                    #     metalinks = Metalinks.query.filter_by(identifier=request.args['identifier']).first()
+                    #     metalinks.xml = isixml
+                    #     metalinks.metatick = 'Y'
+                    #     metalinks.akses = request.args['akses']
+                    #     # db.session.add(metalinks)
+                    #     db.session.commit()
+                    #     # catalog.create_style(filename.split('.')[0], xml.read()) 
+                    resp = json.dumps({'RTN': True, 'MSG': 'Upload berkas pendukung sukses!'})
+                    # except:
+                    #     resp = json.dumps({'RTN': False, 'MSG': 'Error, metadata dengan identifier yang sama sudah ada!'})
+                else:
+                    resp = json.dumps({'RTN': False, 'MSG': 'No DOCs file!'})
+                    return Response(resp, status=405, mimetype='application/json')
+            except:
+                resp = json.dumps({'RTN': False, 'MSG': 'Upload berkas pendukung gagal!'})
+        return Response(resp, mimetype='application/json')    
+    # return jsonify({'RTN': 'Hello!'})
+
 
     # APP MAIN RUNTIME
 
 if __name__ == '__main__':
     if not os.path.exists('gs_db.sqlite'):
         db.create_all()
-    app.run(debug=True, passthrough_errors=False)
+    app.run(debug=True, port=5001, threaded=True, passthrough_errors=False)
+
