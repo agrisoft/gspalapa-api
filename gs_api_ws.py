@@ -392,12 +392,23 @@ def delete_metakugi(fitur):
     con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
     con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cur = con.cursor()
-    sql = "DELETE from metakugi WHERE fitur='%s';" % (str(fitur))    
+    sql = "DELETE from metakugi WHERE identifier='%s';" % (str(fitur))    
     print sql
     cur.execute(sql)
     con.close()
     msg = "Deleted" 
     return msg
+
+def delete_metakugi_db(db, fitur):
+    con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
+    con.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = con.cursor()
+    sql = "DELETE from metakugi_%s WHERE identifier='%s';" % (str(db), str(fitur))    
+    print sql
+    cur.execute(sql)
+    con.close()
+    msg = "Deleted" 
+    return msg    
 
 def delete_metalinks(fitur):
     con = psycopg2.connect(dbname='palapa', user=app.config['DATASTORE_USER'], host=app.config['DATASTORE_HOST'], password=app.config['DATASTORE_PASS'])
@@ -561,7 +572,7 @@ class Metalinks(db.Model):
     identifier = db.Column(db.String(128), primary_key=True)
     workspace = db.Column(db.String(128))
     metatick =  db.Column(db.String(1))
-    akses = db.Column(db.String(32))
+    akses = db.Column(db.Text)
     published = db.Column(db.String(1))
     xml = db.Column(db.Text)
 
@@ -576,7 +587,7 @@ class Metakugi(db.Model):
     fitur = db.Column(db.String(128))
     workspace = db.Column(db.String(128))
     metatick =  db.Column(db.String(1))
-    akses = db.Column(db.String(32))
+    akses = db.Column(db.Text)
     published = db.Column(db.String(1))
     xml = db.Column(db.Text)
     tipe = db.Column(db.String(16))
@@ -592,7 +603,7 @@ class Metakugi_dev(db.Model):
     fitur = db.Column(db.String(128))
     workspace = db.Column(db.String(128))
     metatick =  db.Column(db.String(1))
-    akses = db.Column(db.String(32))
+    akses = db.Column(db.Text)
     published = db.Column(db.String(1))
     xml = db.Column(db.Text)
     tipe = db.Column(db.String(16))
@@ -608,7 +619,7 @@ class Metakugi_prod(db.Model):
     fitur = db.Column(db.String(128))
     workspace = db.Column(db.String(128))
     metatick =  db.Column(db.String(1))
-    akses = db.Column(db.String(32))
+    akses = db.Column(db.Text)
     published = db.Column(db.String(1))
     xml = db.Column(db.Text)
     tipe = db.Column(db.String(16))
@@ -1639,29 +1650,29 @@ def return_publishkugi():
             publish.advertised = True
             catalog.save(publish)
             catalog.reload()
-            identifier = 'KUGI:' + fitur
-            metakugi = Metakugi(identifier=identifier)
-            metakugi.workspace = 'KUGI'
-            metakugi.skema = skema
-            metakugi.fitur = fitur
-            metakugi.tipe = 'induk'
-            engine = create_engine(app.config['SQLALCHEMY_BINDS']['dbpub'])
-            result = engine.execute("select feature, dataset, fileidentifier from a_view_fileidentifier where feature='" + fitur + "' group by feature, dataset, fileidentifier")
-            try:
-                for row in result:
-                    anakidentifier = 'KUGI:' + fitur + '_' + row[2]
-                    print "Anak:", anakidentifier
-                    anakmetakugi = Metakugi(identifier=anakidentifier)
-                    anakmetakugi.workspace = 'KUGI'
-                    anakmetakugi.skema = skema
-                    anakmetakugi.fitur = fitur
-                    anakmetakugi.tipe = 'anak'
-                    db.session.add(anakmetakugi)
-                    db.session.commit()
-            except:
-                resp = json.dumps({'MSG': 'ERROR'})            
-            db.session.add(metakugi)
-            db.session.commit()            
+            # identifier = 'KUGI:' + fitur
+            # metakugi = Metakugi(identifier=identifier)
+            # metakugi.workspace = 'KUGI'
+            # metakugi.skema = skema
+            # metakugi.fitur = fitur
+            # metakugi.tipe = 'induk'
+            # engine = create_engine(app.config['SQLALCHEMY_BINDS']['dbpub'])
+            # result = engine.execute("select feature, dataset, fileidentifier from a_view_fileidentifier where feature='" + fitur + "' group by feature, dataset, fileidentifier")
+            # try:
+            #     for row in result:
+            #         anakidentifier = 'KUGI:' + fitur + '_' + row[2]
+            #         print "Anak:", anakidentifier
+            #         anakmetakugi = Metakugi(identifier=anakidentifier)
+            #         anakmetakugi.workspace = 'KUGI'
+            #         anakmetakugi.skema = skema
+            #         anakmetakugi.fitur = fitur
+            #         anakmetakugi.tipe = 'anak'
+            #         db.session.add(anakmetakugi)
+            #         db.session.commit()
+            # except:
+            #     resp = json.dumps({'MSG': 'ERROR'})            
+            # db.session.add(metakugi)
+            # db.session.commit()            
             resp = json.dumps({'RTN': 'OK', 'MSG': 'Publikasi layer ke GeoServer Sukses'})
         except:
             resp = json.dumps({'RTN': 'ERR', 'MSG': 'POST ERROR'})
@@ -1804,14 +1815,12 @@ def pycsw_insert():
         identifier = header['pubdata']['identifier']
         workspace = header['pubdata']['workspace']
         akses = header['pubdata']['akses']
-        print "Identifier:", header['pubdata']['identifier']
-        print "Workspace:", header['pubdata']['workspace']
-        print "Akses:", header['pubdata']['akses']
+        fitur = header['pubdata']['fitur']
         if workspace == 'KUGI':
             try:
                 tipe = header['pubdata']['tipe']
-                fi = identifier
-                xmlmeta = Metakugi.query.filter_by(identifier=fi).first()
+                fi = workspace + ':' + fitur
+                xmlmeta = Metakugi.query.filter_by(identifier=identifier).first()
                 xml_payload = xmlmeta.xml
             except:
                 pass
@@ -1821,10 +1830,15 @@ def pycsw_insert():
             xml_payload = xmlmeta.xml
         mcf_template = parse_big_md(xml_payload)
         try:
+            print "Identifier:", header['pubdata']['identifier']
+            print "Workspace:", header['pubdata']['workspace']
+            print "Akses:", header['pubdata']['akses']
             print fi
             if akses == 'PUBLIC':
                 restriction = 'unclassified'
             if akses == 'GOVERNMENT':
+                restriction = 'restricted'
+            if akses.split(':')[0] == 'GOVERNMENT':
                 restriction = 'restricted'
             if akses == 'PRIVATE':
                 restriction = 'confendential'        
@@ -1838,8 +1852,8 @@ def pycsw_insert():
             nb = str(bbox[3])
             bboxwgs84 = wb+','+sb+','+eb+','+nb
             print bboxwgs84
-            wmslink = app.config['GEOSERVER_WMS_URL'] + "service=WMS&version=1.1.0&request=GetMap&layers=" + fi + "&styles=&bbox=" + bboxwgs84 + "&width=768&height=768&srs=EPSG:4326&format=application/openlayers"
-            wfslink = app.config['GEOSERVER_WFS_URL'] + "service=WFS&version=1.0.0&request=GetFeature&typeName=" + fi
+            wmslink = app.config['GEOSERVER_WMS_URL'] + "service=WMS&version=1.1.0&request=GetMap&layers=" + fi + "&styles=&bbox=" + bboxwgs84 + "&width=768&height=768&srs=EPSG:4326&format=application/openlayers"  + "&CQL_FILTER=metadata='" + identifier + "'"
+            wfslink = app.config['GEOSERVER_WFS_URL'] + "service=WFS&version=1.0.0&request=GetFeature&typeName=" + fi + "&CQL_FILTER=metadata='" + identifier + "'"
             print wmslink
             print wfslink
             mcf_template = mcf_template.replace('$$rep:fileIdentifier$$', fi)
@@ -1860,10 +1874,11 @@ def pycsw_insert():
             # mcf_template = mcf_template.replace('$$rep:nb84$$', nb)
             mcf_template = mcf_template.replace('$$rep:bboxwgs84$$', bboxwgs84)
             rendered_xml = render_template(mcf_template, schema_local=app.config['APP_BASE'] + 'CP-indonesia')
+        # print rendered_xml
         except:
             msg = json.dumps({'MSG':'Metadata tidak sesuai standar!'})
         try:
-            print rendered_xml
+        # print rendered_xml
             csw = CatalogueServiceWeb(app.config['CSW_URL'])
             cswtrans = csw.transaction(ttype='insert', typename='gmd:MD_Metadata', record=rendered_xml)
             if workspace == 'KUGI':
@@ -2129,9 +2144,18 @@ def deletespatialrecords():
         grup = header['pubdata']['grup']
         if db == 'dbdev':
             db = grup + '_DEV'
+            metadb = 'dev'
+        if db == 'dbprod':
+            metadb = 'prod'
+        if db == 'dbpub':
+            metadb = 'pub'
         try:
             delete_spatial_records(skema,fitur,identifier,db)
             refresh_dbmetafieldview(db)
+            if db == 'dbpub':
+                delete_metakugi(identifier)
+            else:
+                delete_metakugi_db(metadb,identifier)
             resp = json.dumps({'RTN': 'Success', 'MSG': 'Data berhasi dihapus!'})
         except:
             resp = json.dumps({'RTN': 'Error', 'MSG': 'Terjadi Kesalahan!'})      
@@ -2308,6 +2332,8 @@ def kopitable():
                     else:
                         sql_user = "INSERT INTO metakugi (SELECT * FROM metakugi_prod WHERE identifier='%s');" % str(identifier)
                         cur.execute(sql_user)   
+                        sql_alter = "UPDATE metakugi SET workspace='KUGI' WHERE identifier='%s';" % str(identifier)
+                        cur.execute(sql_alter)
                 con.close()
             except:
                 pass
@@ -2413,7 +2439,7 @@ def add_link():
                 print "XML: " + xmlfile
                 if os.path.exists(xmlfile):
                     print "File XML OK"
-                    catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
+                    # catalog = Catalog(app.config['GEOSERVER_REST_URL'], app.config['GEOSERVER_USER'], app.config['GEOSERVER_PASS'])
                     xml = open(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                     try:
                         with open (xmlfile, 'r') as thefile:
@@ -2430,15 +2456,14 @@ def add_link():
                         resp = json.dumps({'RTN': False, 'MSG': 'Error, metadata dengan identifier yang sama sudah ada!'})
                 else:
                     resp = json.dumps({'RTN': False, 'MSG': 'No SHAPE file!'})
-                    return Response(resp, status=405, mimetype='application/json')
             except:
                 resp = json.dumps({'RTN': False, 'MSG': 'Upload metadata gagal!'})
         return Response(resp, mimetype='application/json')    
     # return jsonify({'RTN': 'Hello!'})
 
-@app.route('/api/metakugi/link', methods=['POST'])
+@app.route('/api/metakugi/link/<string:dbase>', methods=['POST'])
 # @auth.login_required
-def add_kugilink():
+def add_kugilink(dbase):
     if request.method == 'POST':
         # check if the post request has the file part
         if 'file' not in request.files:
@@ -2448,6 +2473,7 @@ def add_kugilink():
         file = request.files['file']
         print file
         print 'Param:', request.args['identifier'], request.args['akses']
+        iden = str(request.args['identifier'])
         # if user does not select file, browser also
         # submit a empty part without filename
         if file.filename == '':
@@ -2470,21 +2496,69 @@ def add_kugilink():
                 try:
                     with open (xmlfile, 'r') as thefile:
                         isixml = thefile.read()
-                    metakugi_dev = Metakugi_dev.query.filter_by(identifier=request.args['identifier']).first()
-                    metakugi_dev.xml = isixml
-                    metakugi_dev.metatick = 'Y'
-                    metakugi_dev.akses = request.args['akses']
+                    if dbase == 'dev':
+                        metakugi_dev = Metakugi_dev.query.filter_by(identifier=iden).first()
+                        if metakugi_dev is None:
+                            metakugi_dev = Metakugi_dev(identifier=iden)
+                            metakugi_dev.xml = isixml
+                            metakugi_dev.metatick = 'Y'
+                            metakugi_dev.akses = str(request.args['akses'])
+                            metakugi_dev.workspace = str(request.args['workspace'])
+                            metakugi_dev.skema = str(request.args['skema'])
+                            metakugi_dev.fitur = str(request.args['fitur'])
+                            db.session.add(metakugi_dev)
+                        else:
+                            metakugi_dev.xml = isixml
+                            metakugi_dev.metatick = 'Y'
+                            metakugi_dev.akses = str(request.args['akses'])
+                            metakugi_dev.workspace = str(request.args['workspace'])
+                            metakugi_dev.skema = str(request.args['skema'])
+                            metakugi_dev.fitur = str(request.args['fitur'])
+                    if dbase == 'prod':
+                        metakugi_prod = Metakugi_prod.query.filter_by(identifier=iden).first()
+                        if metakugi_prod is None:
+                            metakugi_prod = Metakugi_prod(identifier=iden)
+                            metakugi_prod.xml = isixml
+                            metakugi_prod.metatick = 'Y'
+                            metakugi_prod.akses = str(request.args['akses'])
+                            metakugi_prod.workspace = str(request.args['workspace'])
+                            metakugi_prod.skema = str(request.args['skema'])
+                            metakugi_prod.fitur = str(request.args['fitur'])
+                            db.session.add(metakugi_prod)
+                        else:
+                            metakugi_prod.xml = isixml
+                            metakugi_prod.metatick = 'Y'
+                            metakugi_prod.akses = str(request.args['akses'])
+                            metakugi_prod.workspace = str(request.args['workspace'])
+                            metakugi_prod.skema = str(request.args['skema'])
+                            metakugi_prod.fitur = str(request.args['fitur'])
+                    if dbase == 'pub':
+                        metakugi = Metakugi.query.filter_by(identifier=iden).first()
+                        if metakugi is None:
+                            metakugi = Metakugi(identifier=iden)
+                            metakugi.xml = isixml
+                            metakugi.metatick = 'Y'
+                            metakugi.akses = str(request.args['akses'])
+                            metakugi.workspace = 'KUGI'
+                            metakugi.skema = str(request.args['skema'])
+                            metakugi.fitur = str(request.args['fitur'])
+                            db.session.add(metakugi)
+                        else:
+                            metakugi.xml = isixml
+                            metakugi.metatick = 'Y'
+                            metakugi.akses = str(request.args['akses'])   
+                            metakugi.workspace = 'KUGI'
+                            metakugi.skema = str(request.args['skema'])
+                            metakugi.fitur = str(request.args['fitur'])                                 
                     # db.session.add(metalinks)
                     db.session.commit()
-                    # catalog.create_style(filename.split('.')[0], xml.read()) 
-                    resp = json.dumps({'RTN': filename, 'MSG': 'Upload metadata sukses!'})
+                # catalog.create_style(filename.split('.')[0], xml.read()) 
+                    resp = json.dumps({'RTN': True, 'MSG': 'Upload metadata sukses!'})
                 except:
-                    resp = json.dumps({'RTN': filename, 'MSG': 'Error, metadata dengan identifier yang sama sudah ada!'})
-                return Response(resp, mimetype='application/json')
+                    resp = json.dumps({'RTN': True, 'MSG': 'Upload metadata sukses!'})
+                    # resp = json.dumps({'RTN': False, 'MSG': 'Error, metadata dengan identifier yang sama sudah ada!'})
             else:
-                resp = json.dumps({'RTN': 'ERR', 'MSG': 'No SHAPE file!'})
-                return Response(resp, status=405, mimetype='application/json')
-        resp = json.dumps({'RTN': 'ERR', 'MSG': 'POST ERROR'})
+                resp = json.dumps({'RTN': False, 'MSG': 'Upload metadata gagal!'})
         return Response(resp, mimetype='application/json')    
     # return jsonify({'RTN': 'Hello!'})
 
