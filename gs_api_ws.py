@@ -1815,7 +1815,8 @@ def pycsw_insert():
         identifier = header['pubdata']['identifier']
         workspace = header['pubdata']['workspace']
         akses = header['pubdata']['akses']
-        fitur = header['pubdata']['fitur']
+        if workspace == 'KUGI':
+            fitur = header['pubdata']['fitur']
         if workspace == 'KUGI':
             try:
                 tipe = header['pubdata']['tipe']
@@ -1877,21 +1878,21 @@ def pycsw_insert():
         # print rendered_xml
         except:
             msg = json.dumps({'MSG':'Metadata tidak sesuai standar!'})
-        try:
+        # try:
         # print rendered_xml
-            csw = CatalogueServiceWeb(app.config['CSW_URL'])
-            cswtrans = csw.transaction(ttype='insert', typename='gmd:MD_Metadata', record=rendered_xml)
-            if workspace == 'KUGI':
-                metakugi = Metakugi.query.filter_by(identifier=header['pubdata']['identifier']).first()     
-                metakugi.published = 'Y'
-                db.session.commit()                          
-            else:
-                metalinks = Metalinks.query.filter_by(identifier=header['pubdata']['identifier']).first()
-                metalinks.published = 'Y'
-                db.session.commit()
-            msg = json.dumps({'MSG':'Publish servis CSW sukses!'})
-        except:
-            msg = json.dumps({'MSG':'Publish servis CSW gagal!'})
+        csw = CatalogueServiceWeb(app.config['CSW_URL'])
+        cswtrans = csw.transaction(ttype='insert', typename='gmd:MD_Metadata', record=rendered_xml)
+        if workspace == 'KUGI':
+            metakugi = Metakugi.query.filter_by(identifier=header['pubdata']['identifier']).first()     
+            metakugi.published = 'Y'
+            db.session.commit()                          
+        else:
+            metalinks = Metalinks.query.filter_by(identifier=header['pubdata']['identifier']).first()
+            metalinks.published = 'Y'
+            db.session.commit()
+        msg = json.dumps({'MSG':'Publish servis CSW sukses!'})
+        # except:
+        #     msg = json.dumps({'MSG':'Publish servis CSW gagal!'})
         return Response(msg, mimetype='application/json')
 
 @app.route('/api/pycswRecord/delete', methods=['POST'])

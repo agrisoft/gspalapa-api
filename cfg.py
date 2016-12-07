@@ -38,4 +38,4 @@ DOWNLOADS_FOLDER = '/tmp/palapa/downloads/'
 ALLOWED_EXTENSIONS = set(['zip', 'ZIP'])
 ALLOWED_VECTOR = set(['shp', 'SHP'])
 ALLOWED_RASTER = set(['tiff', 'tif', 'TIF', 'TIFF'])
-CSW_URL = 'http://localhost:5000/csw'
+CSW_URL = 'http://localhost:8000/csw'
