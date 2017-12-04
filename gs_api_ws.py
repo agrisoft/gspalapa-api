@@ -8,7 +8,7 @@
 # tejo
 # August 2016
 
-import sys, os, shutil
+import sys, os, shutil, platform
 # abspath = os.path.dirname(__file__)
 # sys.path.append(abspath)
 # os.chdir(abspath)
@@ -88,6 +88,14 @@ ma = Marshmallow(app)
 CORS(app)
 
 # Functions
+
+# detect windows os
+import platform
+def iswindows():
+    if platform.system() == 'Windows':
+        return True
+    else:
+        return False
 
 # Mengambil data dari Geoserver REST (output JSON)
 def georest_get(rest_url, user, password):
@@ -712,6 +720,7 @@ class Group(db.Model):
     email = db.Column(db.String(128))
     country = db.Column(db.String(128))
     kodesimpul = db.Column(db.Text)
+    logo = db.Column(db.Text)
 
 class GroupSchema(ma.ModelSchema):
     class Meta:
@@ -1352,13 +1361,13 @@ def kugiprepare():
 @app.route('/api/group/list')
 # @auth.login_required
 def list_group():
-    list_group = User.query.with_entities(Group.name, Group.enabled, Group.organization, Group.url, Group.phone, Group.fax, Group.address, Group.city, Group.administrativearea, Group.postalcode, Group.email, Group.country, Group.kodesimpul)
+    list_group = User.query.with_entities(Group.name, Group.enabled, Group.organization, Group.url, Group.phone, Group.fax, Group.address, Group.city, Group.administrativearea, Group.postalcode, Group.email, Group.country, Group.kodesimpul, Group.logo)
     groups = GroupSchema(many=True)
     output = groups.dump(list_group)
     return json.dumps(output.data)        
 
 @app.route('/api/role/list')
-# @auth.login_required
+# @auth.login_requireds
 def list_role():
     list_role = User.query.with_entities(Roles.name, Roles.parent)
     roles = RolesSchema(many=True)
