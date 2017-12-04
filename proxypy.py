@@ -41,6 +41,9 @@ def get(qstring):
     if "url" in args and _validateUrl(args["url"]):
         reply["status"]["url"] = args["url"]
 
+        print args
+        print args["url"]
+
         if not args["url"].startswith("http://"):
             args["url"] = "http://" + args["url"]
 
