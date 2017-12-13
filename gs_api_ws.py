@@ -997,6 +997,21 @@ class ExtsrvSchema(ma.ModelSchema):
     class Meta:
         model = Extsrv
 
+class Photos(db.Model):
+    __tablename__ = 'photos'
+    id = db.Column(db.BigInteger, primary_key=True)
+    lon =  db.Column(db.Float)
+    lat =  db.Column(db.Float)
+    nama = db.Column(db.Text)
+    remark = db.Column(db.Text)
+    uploader = db.Column(db.Text)
+    ugroup = db.Column(db.Text)
+    photo = db.Column(db.Text)
+
+class PhotosSchema(ma.ModelSchema):
+    class Meta:
+        model = Photos
+
 # FUNCTIONS
 
 def identity(payload):
@@ -1052,13 +1067,22 @@ def sisteminfo():
         print row.key, row.value
         info[row.key] = row.value
     resp = json.dumps(info)
+    # print info
+    sqlgetextent = 'SELECT "4326_minx"::text as minx, "4326_miny"::text as miny, "4326_maxx"::text as maxx, "4326_maxy"::text as maxy FROM kode_simpul WHERE region_cod=' + "'%s'" % (info['kodesimpul'].split(',')[0])
+    result = engine.execute(sa_text(sqlgetextent)).fetchall()
+    extent = []
+    for items in result:
+        for item in items:
+            extent.append(item)
+    info['extent'] = extent
     print info
+    resp = json.dumps(info)
     return Response(resp, mimetype='application/json')
 
 @app.route('/api/sisteminfo/edit', methods=['POST'])
 def sisteminfoedit():
     if request.method == 'POST':
-        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
         organization = urllib2.unquote(header['pubdata']['organization'])
         url = urllib2.unquote(header['pubdata']['url'])
         individualname = urllib2.unquote(header['pubdata']['individualname'])
@@ -1074,6 +1098,10 @@ def sisteminfoedit():
         hoursofservice = urllib2.unquote(header['pubdata']['hoursofservice'])
         contactinstruction = urllib2.unquote(header['pubdata']['contactinstruction'])
         kodesimpul = urllib2.unquote(header['pubdata']['kodesimpul'])
+        try:
+            logo = header['pubdata']['logo']
+        except:
+            logo = ''
         print header
         r_address = Sistem.query.filter_by(key='address').first()
         r_administrativearea = Sistem.query.filter_by(key='administrativearea').first()
@@ -1090,6 +1118,7 @@ def sisteminfoedit():
         r_postalcode= Sistem.query.filter_by(key='postalcode').first()
         r_url = Sistem.query.filter_by(key='url').first()
         r_kodesimpul = Sistem.query.filter_by(key='kodesimpul').first()
+        r_logo = Sistem.query.filter_by(key='logo').first()
         r_address.value = address
         r_administrativearea.value = administrativearea
         r_city.value = city
@@ -1105,8 +1134,11 @@ def sisteminfoedit():
         r_postalcode.value = postalcode
         r_url.value = url
         r_kodesimpul.value = kodesimpul
+        if logo != '':
+            r_logo.value = logo
         db.session.commit()
-        return jsonify({'Result': True, 'MSG':'Data sukses disimpan!'})
+        resp = json.dumps({'RTN': True, 'MSG': 'Sunting sistem info berhasil!'})
+        return Response(resp, mimetype='application/json')
 
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
 def login():
@@ -1325,7 +1357,7 @@ def list_userswgroup():
 # @auth.login_required
 def new_groups():
     if request.method == 'POST':
-        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
     print header['pubdata']
     name = urllib2.unquote(header['pubdata']['name'])
     name = re.sub('[\s+]', '', name)
@@ -1398,7 +1430,7 @@ def new_groups():
 @app.route('/api/group/edit', methods=['POST'])
 def groupedit():
     if request.method == 'POST':
-        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
     print header['pubdata']
     name = header['pubdata']['name']
     organization = urllib2.unquote(header['pubdata']['organization'])
@@ -3702,7 +3734,7 @@ def listmetalayer():
 @app.route('/api/keyword/list')
 # @auth.login_requireds
 def list_keyword():
-    list_keyword = Keywords.query.with_entities(Keywords.id, Keywords.keyword)
+    list_keyword = Keywords.query.with_entities(Keywords.id, Keywords.keyword, Keywords.logo)
     keywords = KeywordsSchema(many=True)
     output = keywords.dump(list_keyword)
     return json.dumps(output.data)
@@ -3922,6 +3954,47 @@ def list_photos():
         output.append(inner)
     jsonoutput = json.dumps(output)
     return Response(jsonoutput, mimetype='application/json')
+
+@app.route('/api/photos/add', methods=['POST'])
+# @auth.login_required
+def new_photos():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
+    print header['pubdata']
+    item_nama = urllib2.unquote(header['pubdata']['nama'])
+    item_lon = header['pubdata']['lon']
+    item_lat = header['pubdata']['lat']
+    item_remark = urllib2.unquote(header['pubdata']['remark'])
+    item_uploader = urllib2.unquote(header['pubdata']['uploader'])
+    item_ugroup = urllib2.unquote(header['pubdata']['ugroup'])
+    try:
+        item_photo = header['pubdata']['photo'].split('base64,')[1]
+    except:
+        item_photo = ''
+    # sqlphotos = "INSERT INTO photos (lon,lat,nama,remark,uploader,ugroup,photo) values (%s,%s,'%s','%s','%s','%s','%s')" % (item_lon,item_lat,item_nama,item_remark,item_uploader,item_ugroup,item_photo)
+    # result = engine.execute(sa_text(sqlphotos))
+    photos = Photos(lon=item_lon,lat=item_lat,nama=item_nama,remark=item_remark,uploader=item_uploader,ugroup=item_ugroup,photo=item_photo)
+    db.session.add(photos)
+    db.session.commit()
+    resp = json.dumps({'RTN': True, 'MSG': 'Tambah objek berhasil!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/photos/delete', methods=['POST'])
+# @auth.login_required
+def delete_photos():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+    print header['pubdata']
+    item_id = header['pubdata']['id']
+    sqldelete = "DELETE FROM photos WHERE id=%s" % (item_id)
+    print(sqldelete)
+    engine.execute(sa_text(sqldelete).execution_options(autocommit=True))
+    # keyword = Keywords(keyword=item_keyword)
+    # db.session.add(keyword)
+    # db.session.commit()
+    resp = json.dumps({'RTN': True, 'MSG': 'Hapus objek berhasil!'})
+    return Response(resp, mimetype='application/json')
+
 
     # APP MAIN RUNTIME
 
