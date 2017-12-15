@@ -83,10 +83,10 @@ app.config['GEOSERVER_DATA_DIR'] = cfg.GEOSERVER_DATA_DIR
 reload(sys)
 sys.setdefaultencoding('utf8')
 
-engine = create_engine(app.config['SQLALCHEMY_BINDS']['services'],pool_size=30, max_overflow=0)
-engine_dev = create_engine(app.config['SQLALCHEMY_BINDS']['dbdev'],pool_size=30, max_overflow=0)
-engine_prod = create_engine(app.config['SQLALCHEMY_BINDS']['dbprod'],pool_size=30, max_overflow=0)
-engine_pub = create_engine(app.config['SQLALCHEMY_BINDS']['dbpub'],pool_size=30, max_overflow=0)
+engine = create_engine(app.config['SQLALCHEMY_BINDS']['services'], pool_size=30, max_overflow=0)
+engine_dev = create_engine(app.config['SQLALCHEMY_BINDS']['dbdev'], pool_size=30, max_overflow=0)
+engine_prod = create_engine(app.config['SQLALCHEMY_BINDS']['dbprod'], pool_size=30, max_overflow=0)
+engine_pub = create_engine(app.config['SQLALCHEMY_BINDS']['dbpub'], pool_size=30, max_overflow=0)
 
 # extensions
 db = SQLAlchemy(app)
@@ -1011,6 +1011,43 @@ class Photos(db.Model):
 class PhotosSchema(ma.ModelSchema):
     class Meta:
         model = Photos
+
+class Kontak(db.Model):
+	__tablename__ = 'kontak'
+	id = db.Column(db.Integer, primary_key=True)
+	nama = db.Column(db.String(100))
+	email = db.Column(db.String(20))
+	alamat = db.Column(db.String(255))
+	subject = db.Column(db.String(100))
+	pesan = db.Column(db.Text)
+
+class KontakSchema(ma.ModelSchema):
+    class Meta:
+        model = Kontak
+
+class Linkweb(db.Model):
+	__tablename__ = 'linkweb'
+	id = db.Column(db.Integer, primary_key=True)
+	nama = db.Column(db.String(100))
+	url = db.Column(db.String(255))
+	image = db.Column(db.Text)
+
+class LinkwebSchema(ma.ModelSchema):
+    class Meta:
+        model = Linkweb 
+    
+class FrontEndCMS(db.Model):
+    __tablename__ = 'front_end_cms'
+    id = db.Column(db.Integer, primary_key=True)
+    image_1 = db.Column(db.Text)
+    image_2 = db.Column(db.Text)
+    image_3 = db.Column(db.Text)
+    image_4 = db.Column(db.Text)
+    remark_1 = db.Column(db.Text)
+
+class FrontEndCMSSchema(ma.ModelSchema):
+    class Meta:
+        model = FrontEndCMS
 
 # FUNCTIONS
 
@@ -3491,7 +3528,7 @@ def frontendtheme():
 @app.route('/api/setfrontendtheme', methods=['POST'])
 def setfrontendtheme():
     if request.method == 'POST':
-        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
     print header
     judul_situs = urllib2.unquote(header['pubdata']['judul_situs'])
     logo_situs = urllib2.unquote(header['pubdata']['logo_situs'])
@@ -3718,7 +3755,7 @@ def cekpubiden(identifier):
 
 @app.route('/api/listmetalayer')
 def listmetalayer():
-    sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links FROM metadata"
+    sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata GROUP BY identifier"
     resultsql = engine.execute(sa_text(sqlmeta)).fetchall()
     resultkey = engine.execute(sa_text(sqlmeta)).keys()
     # return json.dumps(output.data)
@@ -3995,6 +4032,172 @@ def delete_photos():
     resp = json.dumps({'RTN': True, 'MSG': 'Hapus objek berhasil!'})
     return Response(resp, mimetype='application/json')
 
+@app.route('/api/linkweb/list')
+# @auth.login_requireds
+def list_linkweb():
+    list_linkweb = Linkweb.query.all()
+    linkweb = LinkwebSchema(many=True)
+    output = linkweb.dump(list_linkweb)
+    return json.dumps(output.data)
+
+@app.route('/api/linkweb/add', methods=['POST'])
+# @auth.login_required
+def new_linkweb():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
+    print header['pubdata']
+    item_name = urllib2.unquote(header['pubdata']['nama'])
+    item_url = urllib2.unquote(header['pubdata']['url'])    
+    try:
+        item_photo = header['pubdata']['image'].split('base64,')[1]
+    except:
+        item_photo = ''
+    linkweb = Linkweb(nama=item_name, url=item_url, image=item_photo)
+    db.session.add(linkweb)
+    db.session.commit()
+    resp = json.dumps({'RTN': True, 'MSG': 'Tambah link web berhasil!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/linkweb/edit', methods=['POST'])
+# @auth.login_required
+def edit_linkweb():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
+    print header['pubdata']
+    item_name = urllib2.unquote(header['pubdata']['nama'])
+    item_url = urllib2.unquote(header['pubdata']['url'])
+    item_id = header['pubdata']['id']
+    try:
+        item_photo = header['pubdata']['image'].split('base64,')[1]
+    except:
+        item_photo = ''
+    if item_photo == '':
+        sqledit = "UPDATE linkweb SET nama='%s', url='%s' WHERE id=%s" % (item_name, item_url, item_id)
+    else:
+        sqledit = "UPDATE linkweb SET nama='%s', url='%s', image='%s' WHERE id=%s" % (item_name, item_url, item_photo, item_id)
+    print(sqledit)
+    engine.execute(sa_text(sqledit).execution_options(autocommit=True))
+    # keyword = Keywords(keyword=item_keyword)
+    # db.session.add(keyword)
+    # db.session.commit()
+    resp = json.dumps({'RTN': True, 'MSG': 'Sunting link web berhasil!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/linkweb/delete', methods=['POST'])
+# @auth.login_required
+def delete_linkweb():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+    print header['pubdata']
+    item_id = header['pubdata']['id']
+    sqldelete = "DELETE FROM linkweb WHERE id=%s" % (item_id)
+    print(sqldelete)
+    engine.execute(sa_text(sqldelete).execution_options(autocommit=True))
+    # keyword = Keywords(keyword=item_keyword)
+    # db.session.add(keyword)
+    # db.session.commit()
+    resp = json.dumps({'RTN': True, 'MSG': 'Hapus link web berhasil!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/kontak/list')
+# @auth.login_requireds
+def list_kontak():
+    list_kontak = Kontak.query.all()
+    kontak = KontakSchema(many=True)
+    output = kontak.dump(list_kontak)
+    return json.dumps(output.data)
+
+@app.route('/api/kontakcreate', methods=['POST'])
+def kontakcreate():
+	data = request.form
+	datakontak = Kontak(nama= request.form.get('nama'),email=request.form.get('email'),alamat=request.form.get('alamat'),subject=request.form.get('subject'),pesan=request.form.get('pesan'))
+	db.session.add(datakontak)
+	db.session.commit()
+	return jsonify(data)
+
+@app.route('/api/kontak/delete', methods=['POST'])
+# @auth.login_required
+def delete_kontak():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+    print header['pubdata']
+    item_id = header['pubdata']['id']
+    sqldelete = "DELETE FROM kontak WHERE id=%s" % (item_id)
+    print(sqldelete)
+    engine.execute(sa_text(sqldelete).execution_options(autocommit=True))
+    # keyword = Keywords(keyword=item_keyword)
+    # db.session.add(keyword)
+    # db.session.commit()
+    resp = json.dumps({'RTN': True, 'MSG': 'Hapus kontak masuk berhasil!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/frontend')
+def frontend():
+    frontend = FrontEndCMS.query.all()
+    frontenddata = FrontEndCMSSchema(many=True)
+    output = frontenddata.dump(frontend)
+    return json.dumps(output.data)
+
+@app.route('/api/setfrontend', methods=['POST'])
+def setfrontend():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
+    print header['pubdata']
+    item_id = header['pubdata']['id']
+    # image_1 = header['pubdata'][0]['image_1']
+    # image_2 = header['pubdata'][0]['image_2']
+    # image_3 = header['pubdata'][0]['image_3']
+    # image_4 = header['pubdata'][0]['image_4']
+    try:
+        image_1 = header['pubdata']['image_1']
+        print 'IMAGE1'
+    except:
+        image_1 = ''
+        print '!IMAGE1'
+    try:
+        image_2 = header['pubdata']['image_2']
+        print 'IMAGE2'
+    except:
+        image_2 = ''
+        print '!IMAGE2'
+    try:
+        image_3 = header['pubdata']['image_3']
+        print 'IMAGE3'
+    except:
+        image_3 = ''
+        print '!IMAGE3'
+    try:
+        image_4 = header['pubdata']['image_4']
+        print 'IMAGE4'
+    except:
+        image_4 = ''
+        print '!IMAGE4'
+    remark_1 = urllib2.unquote(header['pubdata']['remark_1'])
+    # setfrontcms = FrontEndCMS.query.filter_by(id=item_id).first()
+    # setfrontcms.remark_1 = remark_1
+    if image_1 != '':
+        inssql = "UPDATE front_end_cms SET image_1='%s' WHERE id=%s" % (image_1, item_id)
+        engine.execute(sa_text(inssql).execution_options(autocommit=True))
+        print inssql
+        # setfrontcms.image_1 = image_1
+    if image_2 != '':
+        inssql = "UPDATE front_end_cms SET image_2='%s' WHERE id=%s" % (image_2, item_id)
+        engine.execute(sa_text(inssql).execution_options(autocommit=True))
+        # setfrontcms.image_2 = image_2
+    if image_3 != '':
+        inssql = "UPDATE front_end_cms SET image_3='%s' WHERE id=%s" % (image_3, item_id)
+        engine.execute(sa_text(inssql).execution_options(autocommit=True))
+        # setfrontcms.image_3 = image_3
+    if image_4 != '':
+        inssql = "UPDATE front_end_cms SET image_4='%s' WHERE id=%s" % (image_4, item_id)
+        engine.execute(sa_text(inssql).execution_options(autocommit=True))
+        # setfrontcms.image_4 = image_4
+    inssql = "UPDATE front_end_cms SET remark_1='%s' WHERE id=%s" % (remark_1, item_id)
+    print inssql
+    engine.execute(sa_text(inssql).execution_options(autocommit=True))
+    # db.session.commit()
+    msg = json.dumps({'Result': True, 'MSG':'Data sukses disimpan!'})
+    return Response(msg, mimetype='application/json')
 
     # APP MAIN RUNTIME
 
