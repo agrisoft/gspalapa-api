@@ -3755,17 +3755,62 @@ def cekpubiden(identifier):
 
 @app.route('/api/listmetalayer')
 def listmetalayer():
-    sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata GROUP BY identifier"
+    print request
+    if request.args.get('keyword') or request.args.get('kategori') or request.args.get('walidata') or request.args.get('bbox') :
+        print 'ARGS'
+        keyword = urllib2.unquote(request.args.get('keyword')).replace('+',' ')
+        kategori = urllib2.unquote(request.args.get('kategori')).replace('+',' ')
+        walidata = urllib2.unquote(request.args.get('walidata')).replace('+',' ')
+        bbox = urllib2.unquote(request.args.get('bbox'))
+        if keyword != '':
+            if bbox != '':
+                print 'ARGS A'
+                sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata WHERE title ILIKE '%%%s%%' OR abstract ILIKE '%%%s%%' AND ST_Intersects(wkb_geometry, ST_MakeEnvelope(%s, 4326))='t' GROUP BY identifier" % (keyword, keyword, bbox)
+            else:
+                print 'ARGS B'
+                sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata WHERE title ILIKE '%%%s%%' OR abstract ILIKE '%%%s%%' GROUP BY identifier" % (keyword, keyword)               
+        if kategori != '':
+            if bbox != '':
+                print 'ARGS C'
+                sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata WHERE keywords ILIKE '%%%s%%' AND ST_Intersects(wkb_geometry, ST_MakeEnvelope(%s, 4326))='t' GROUP BY identifier" % (kategori, bbox)
+            else:
+                print 'ARGS D'
+                sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata WHERE keywords ILIKE '%%%s%%' GROUP BY identifier" % (kategori)
+        if walidata != '':
+            if bbox != '':
+                print 'ARGS E'
+                sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata WHERE identifier ILIKE '%%%s%%' AND ST_Intersects(wkb_geometry, ST_MakeEnvelope(%s, 4326))='t' GROUP BY identifier" % (walidata, bbox)
+            else:
+                print 'ARGS F'
+                sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata WHERE identifier ILIKE '%%%s%%' GROUP BY identifier" % (walidata)
+        else:
+            if bbox != '':
+                print 'ARGS G'
+                sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata WHERE (title ILIKE '%%%s%%' OR abstract ILIKE '%%%s%%') AND keywords ILIKE '%%%s%%' AND identifier ILIKE '%%%s%%' AND ST_Intersects(wkb_geometry, ST_MakeEnvelope(%s, 4326))='t' GROUP BY identifier" % (keyword, keyword, kategori, walidata, bbox)
+    else:
+        print 'LOSS'
+        try:
+            bbox = urllib2.unquote(request.args.get('bbox'))
+        except:
+            bbox = ''
+        if bbox != '':
+            print 'ARGS H'
+            sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata WHERE ST_Intersects(wkb_geometry, ST_MakeEnvelope(%s, 4326))='t' GROUP BY identifier" % (bbox)
+        else:
+            print 'ARGS I'
+            sqlmeta = "SELECT identifier, insert_date, type, title, abstract, keywords, links, ST_Extent(wkb_geometry) as bbox FROM metadata GROUP BY identifier"
+    print sqlmeta
     resultsql = engine.execute(sa_text(sqlmeta)).fetchall()
     resultkey = engine.execute(sa_text(sqlmeta)).keys()
     # return json.dumps(output.data)
     output = []
-    # try:
+        # try:
     for item in resultsql:
         row = {}
         for key, val in zip(resultkey,item):
             row[key] = val
         output.append(row)
+    # output = []
     return Response(json.dumps(output), mimetype='application/json')
 
 @app.route('/api/keyword/list')
