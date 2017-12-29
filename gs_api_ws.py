@@ -1723,6 +1723,10 @@ def get_wmslayers():
         gslayer['layer_abstract'] = content['featureType']['abstract']
       except:
         gslayer['layer_abstract'] = ''
+      try:
+        gslayer['layer_advertised'] = str_to_bool(content['featureType']['advertised'].capitalize())
+      except:
+        gslayer['layer_advertised'] = False
       gslayer['layer_srs'] = content['featureType']['srs']
       gslayer['layer_minx'] = float(content['featureType']['latLonBoundingBox']['minx'])
       gslayer['layer_maxx'] = float(content['featureType']['latLonBoundingBox']['maxx'])
@@ -1762,6 +1766,10 @@ def get_wmslayers():
         gslayer['layer_abstract'] = content['coverage']['abstract']
       except:
         gslayer['layer_abstract'] = ''
+      try:
+        gslayer['layer_advertised'] = str_to_bool(content['featureType']['advertised'].capitalize())
+      except:
+        gslayer['layer_advertised'] = False
       gslayer['layer_srs'] = content['coverage']['srs']
       gslayer['layer_minx'] = float(content['coverage']['latLonBoundingBox']['minx'])
       gslayer['layer_maxx'] = float(content['coverage']['latLonBoundingBox']['maxx'])
