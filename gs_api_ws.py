@@ -557,7 +557,7 @@ def pycswadv(layer_id,layer_workspace,layer_tipe):
     identifier = layer_id
     workspace = layer_workspace
     tipe = layer_tipe
-    keyword = ''
+    keyword = 'Lain-lain'
     if workspace == 'KUGI':
         fi = workspace + ':' + identifier
         xmlmeta = Metakugi.query.filter_by(fitur=identifier).first()
@@ -610,7 +610,11 @@ def pycswadv(layer_id,layer_workspace,layer_tipe):
         mcf_template = mcf_template.replace('$$rep:geoserverwfs$$', app.config['GEOSERVER_WFS_URL'])
         mcf_template = mcf_template.replace('$$rep:geoserverfullwfs$$', wfslink)
         mcf_template = mcf_template.replace('$$rep:bboxwgs84$$', bboxwgs84)
-        mcf_template = mcf_template.replace('$$rep:keywords$$', keyword)
+        # mcf_template = mcf_template.replace('$$rep:keywords$$', keyword)
+        try:
+            mcf_template = mcf_template.replace('$$rep:keywords$$', keyword)
+        except:
+            mcf_template = mcf_template.replace('$$rep:keywords$$', 'Lain-lain')
         rendered_xml = render_template(mcf_template, schema_local=app.config['APP_BASE'] + 'CP-indonesia')
     # print rendered_xml
     except:
@@ -4033,6 +4037,45 @@ def fakepath():
 # @auth.login_requireds
 def list_photos():
     listsql = "SELECT * FROM photos"
+    result = engine.execute(sa_text(listsql))
+    resultkey = engine.execute(sa_text(listsql)).keys()
+    rows = result.fetchall()
+    output = []
+    for item in rows:
+        inner = {}
+        for key, val in zip(resultkey,item):
+            inner[key] = str(val)
+        output.append(inner)
+    jsonoutput = json.dumps(output)
+    return Response(jsonoutput, mimetype='application/json')
+
+@app.route('/api/photos/query')
+# @auth.login_requireds
+def query_photos():
+    minx = request.args['minx']
+    miny = request.args['miny']
+    maxx = request.args['maxx']
+    maxy = request.args['maxy']
+    bbox = str(minx) + ',' + str(miny) + ',' + str(maxx) + ',' + str(maxy)
+    listsql = "SELECT * FROM photos WHERE ST_Intersects(ST_SetSRID(ST_MakePoint(lon, lat), 4326), ST_MakeEnvelope(%s, 4326))='t'" % (bbox)
+    print listsql
+    result = engine.execute(sa_text(listsql))
+    resultkey = engine.execute(sa_text(listsql)).keys()
+    rows = result.fetchall()
+    output = []
+    for item in rows:
+        inner = {}
+        for key, val in zip(resultkey,item):
+            inner[key] = str(val)
+        output.append(inner)
+    jsonoutput = json.dumps(output)
+    return Response(jsonoutput, mimetype='application/json')
+
+@app.route('/api/photos/id')
+# @auth.login_requireds
+def photo_id():
+    photoid = request.args['id']
+    listsql = "SELECT * FROM photos WHERE id='%s'" % (photoid)
     result = engine.execute(sa_text(listsql))
     resultkey = engine.execute(sa_text(listsql)).keys()
     rows = result.fetchall()
