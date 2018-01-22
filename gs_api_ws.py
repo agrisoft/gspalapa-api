@@ -14,9 +14,11 @@ import sys, os, shutil, platform
 # os.chdir(abspath)
 import urllib2, json, base64, sqlalchemy, sqlalchemy_utils, zipfile, ogr, shapefile, psycopg2, uuid, jwt, time, datetime, re
 import ogr2ogr, osr, re, gdal, xmltodict, fnmatch
+import flask
 from flask import Flask, abort, request, redirect, jsonify, g, url_for, send_from_directory, Response, stream_with_context
 from flask_jwt import JWT, jwt_required, current_identity
 from werkzeug import secure_filename
+from werkzeug.datastructures import ImmutableMultiDict
 from flask_sqlalchemy import SQLAlchemy
 from flask_security import http_auth_required, auth_token_required, Security, RoleMixin, UserMixin, SQLAlchemyUserDatastore
 import psycopg2
@@ -38,9 +40,11 @@ from datetime import datetime as dt
 from sqlalchemy import and_, create_engine, func, or_
 from sqlalchemy.sql import text as sa_text
 from sqlalchemy.sql import func
+from sqlalchemy.ext.declarative import declarative_base
 import StringIO
 import proxypy
 import cfg
+import requests
 
 # initialization
 app = Flask(__name__)
@@ -93,6 +97,18 @@ db = SQLAlchemy(app)
 auth = HTTPBasicAuth()
 ma = Marshmallow(app)
 CORS(app)
+
+Base = declarative_base()
+
+method_requests_mapping = {
+    'GET': requests.get,
+    'HEAD': requests.head,
+    'POST': requests.post,
+    'PUT': requests.put,
+    'DELETE': requests.delete,
+    'PATCH': requests.patch,
+    'OPTIONS': requests.options,
+}
 
 # Functions
 
@@ -1053,6 +1069,40 @@ class FrontEndCMSSchema(ma.ModelSchema):
     class Meta:
         model = FrontEndCMS
 
+class Berita(db.Model):
+	__tablename__ = 'berita'
+	id = db.Column(db.Integer, primary_key=True)
+	tanggal = db.Column(db.Date)
+	judul = db.Column(db.Text)
+	isiberita = db.Column(db.Text)
+
+class BeritaSchema(ma.ModelSchema):
+    class Meta:
+        model = Berita 
+
+class Statistik(db.Model):
+    __tablename__ = 'statistik'
+    id = db.Column(db.Integer, primary_key=True)
+    halaman = db.Column(db.Text)
+    download = db.Column(db.Boolean)
+    pencarian = db.Column(db.Boolean)
+    ip =  db.Column(db.Text)
+    country_code = db.Column(db.Text)
+    country_name = db.Column(db.Text)
+    region_code = db.Column(db.Text)
+    region_name = db.Column(db.Text)
+    city = db.Column(db.Text)
+    zip_code = db.Column(db.Text)
+    time_zone = db.Column(db.Text)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    metro_code = db.Column(db.Text)
+    tanggal = db.Column(db.DateTime, default=datetime.datetime.utcnow) 
+
+class StatistikSchema(ma.ModelSchema):
+    class Meta:
+        model = Statistik 
+
 # FUNCTIONS
 
 def identity(payload):
@@ -1139,11 +1189,12 @@ def sisteminfoedit():
         hoursofservice = urllib2.unquote(header['pubdata']['hoursofservice'])
         contactinstruction = urllib2.unquote(header['pubdata']['contactinstruction'])
         kodesimpul = urllib2.unquote(header['pubdata']['kodesimpul'])
+        tentangkami = urllib2.unquote(header['pubdata']['tentangkami']) 
         try:
             logo = header['pubdata']['logo']
         except:
             logo = ''
-        print header
+        print tentangkami
         r_address = Sistem.query.filter_by(key='address').first()
         r_administrativearea = Sistem.query.filter_by(key='administrativearea').first()
         r_city = Sistem.query.filter_by(key='city').first()
@@ -1160,6 +1211,7 @@ def sisteminfoedit():
         r_url = Sistem.query.filter_by(key='url').first()
         r_kodesimpul = Sistem.query.filter_by(key='kodesimpul').first()
         r_logo = Sistem.query.filter_by(key='logo').first()
+        r_tentangkami = Sistem.query.filter_by(key='tentangkami').first()
         r_address.value = address
         r_administrativearea.value = administrativearea
         r_city.value = city
@@ -1175,6 +1227,7 @@ def sisteminfoedit():
         r_postalcode.value = postalcode
         r_url.value = url
         r_kodesimpul.value = kodesimpul
+        r_tentangkami.value = tentangkami
         if logo != '':
             r_logo.value = logo
         db.session.commit()
@@ -3382,22 +3435,33 @@ def savetable(db, skema, fitur, identifier):
     response.headers['Content-Disposition'] = 'attachment; filename=%s' % filename
     return response
 
-@app.route('/api/proxy', methods=['POST','GET'])
+# @app.route('/api/proxy', methods=['POST','GET'])
+# def crossdom():
+#     reply = proxypy.get(request.query_string)
+#     # print request.query_string
+#     # print "REPLY:", reply
+#     proxy = json.loads(reply)
+#     result = proxy['content']
+#     if request.method == 'POST':
+#         print "POST", request.query_string
+#         print "DATA", request.data
+#         print "HEADER", request.headers
+#         data = request.data
+#         reply = proxypy.post(request.query_string,request.data,request.headers)
+#         proxy = json.loads(reply)
+#         result = proxy['content']
+#     return Response(result,status=200, mimetype='text/plain')
+
+@app.route('/api/proxy', methods=method_requests_mapping.keys())
 def crossdom():
-    reply = proxypy.get(request.query_string)
-    # print request.query_string
-    # print "REPLY:", reply
-    proxy = json.loads(reply)
-    result = proxy['content']
-    if request.method == 'POST':
-        print "POST", request.query_string
-        print "DATA", request.data
-        print "HEADER", request.headers
-        data = request.data
-        reply = proxypy.post(request.query_string,request.data,request.headers)
-        proxy = json.loads(reply)
-        result = proxy['content']
-    return Response(result,status=200, mimetype='text/plain')
+    url = request.args['url']
+    requests_function = method_requests_mapping[flask.request.method]
+    requested = requests_function(url, stream=True, params=flask.request.args)
+    response = flask.Response(flask.stream_with_context(requested.iter_content()),
+                              mimetype='text/plain',
+                              status=requested.status_code)
+    # response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 @app.route('/api/docs/add', methods=['POST'])
 # @auth.login_required
@@ -4294,6 +4358,126 @@ def setfrontend():
     # db.session.commit()
     msg = json.dumps({'Result': True, 'MSG':'Data sukses disimpan!'})
     return Response(msg, mimetype='application/json')
+
+@app.route('/api/berita/list')
+# @auth.login_requireds
+def list_berita():
+    list_berita = Berita.query.all()
+    berita = BeritaSchema(many=True)
+    output = berita.dump(list_berita)
+    return json.dumps(output.data)
+
+@app.route('/api/berita/add', methods=['POST'])
+# @auth.login_required
+def new_berita():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
+    print header['pubdata']
+    item_tanggal = header['pubdata']['tanggal'].split('T')[0]
+    item_judul = urllib2.unquote(header['pubdata']['judul'])
+    item_isiberita = urllib2.unquote(header['pubdata']['isiberita'])    
+    berita = Berita(tanggal=item_tanggal, judul=item_judul, isiberita=item_isiberita)
+    db.session.add(berita)
+    db.session.commit()
+    resp = json.dumps({'RTN': True, 'MSG': 'Tambah berita berhasil!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/berita/edit', methods=['POST'])
+# @auth.login_required
+def edit_berita():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('json=')[1])
+    print header['pubdata']
+    item_tanggal = header['pubdata']['tanggal'].split('T')[0]
+    item_judul = urllib2.unquote(header['pubdata']['judul'])
+    item_isiberita = urllib2.unquote(header['pubdata']['isiberita'])  
+    item_id = header['pubdata']['id']
+    sqledit = "UPDATE berita SET tanggal='%s', judul='%s', isiberita='%s' WHERE id=%s" % (item_tanggal, item_judul, item_isiberita, item_id)
+    print(sqledit)
+    engine.execute(sa_text(sqledit).execution_options(autocommit=True))
+    # keyword = Keywords(keyword=item_keyword)
+    # db.session.add(keyword)
+    # db.session.commit()
+    resp = json.dumps({'RTN': True, 'MSG': 'Sunting berita berhasil!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/berita/delete', methods=['POST'])
+# @auth.login_required
+def delete_berita():
+    if request.method == 'POST':
+        header = json.loads(urllib2.unquote(request.data).split('=')[1])
+    print header['pubdata']
+    item_id = header['pubdata']['id']
+    sqldelete = "DELETE FROM berita WHERE id=%s" % (item_id)
+    print(sqldelete)
+    engine.execute(sa_text(sqldelete).execution_options(autocommit=True))
+    # keyword = Keywords(keyword=item_keyword)
+    # db.session.add(keyword)
+    # db.session.commit()
+    resp = json.dumps({'RTN': True, 'MSG': 'Hapus berita berhasil!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/statistik/push', methods=['POST'])
+# @auth.login_required
+def statistikpush():
+    if request.method == 'POST':
+        # print request.form
+        data = request.form
+        header = data.to_dict(flat=False)
+        print header
+        statistik = Statistik(halaman=header['halaman'][0],download=header['download'][0],ip=header['ip'][0],country_code=header['country_code'][0],country_name=header['country_name'][0],region_code=header['region_code'][0],region_name=header['region_name'][0],city=header['city'][0],zip_code=header['zip_code'][0],time_zone=header['time_zone'][0],latitude=header['latitude'][0],longitude=header['longitude'][0],metro_code=header['metro_code'][0],pencarian=header['pencarian'][0])
+        db.session.add(statistik)
+        db.session.commit()
+    #     header = json.loads(urllib2.unquote(request.data))
+    # print header
+    resp = json.dumps({'RTN': True, 'MSG': 'OK!'})
+    return Response(resp, mimetype='application/json')
+
+@app.route('/api/statistik/query', methods=['GET'])
+# @auth.login_required
+def statistikquery():
+    jenis = request.args['jenis']
+    hari = int(request.args['hari'])
+    if hari == 0:
+        if jenis == 'download':
+            sql = "SELECT distinct halaman, country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE download = TRUE GROUP BY halaman, city, country_name, latitude, longitude"
+        elif jenis == 'pencarian':
+            sql = "SELECT distinct halaman, country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE pencarian =  TRUE GROUP BY halaman, city, country_name, latitude, longitude"
+        else:
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik GROUP BY city, country_name, latitude, longitude"
+    if hari == 1:
+        if jenis == 'download':
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE date_trunc('day',tanggal) >= (now()::date - interval '1 days') AND download = TRUE GROUP BY city, country_name, latitude, longitude"
+        elif jenis == 'pencarian':
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE date_trunc('day',tanggal) >= (now()::date - interval '1 days') AND pencarian = TRUE GROUP BY city, country_name, latitude, longitude"
+        else:
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE date_trunc('day',tanggal) >= (now()::date - interval '1 days') GROUP BY city, country_name, latitude, longitude"
+    if hari == 7:
+        if jenis == 'download':
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE date_trunc('day',tanggal) >= (now()::date - interval '7 days') AND download = TRUE GROUP BY city, country_name, latitude, longitude"
+        elif jenis == 'pencarian':
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE date_trunc('day',tanggal) >= (now()::date - interval '7 days') AND pencarian = TRUE GROUP BY city, country_name, latitude, longitude"
+        else:
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE date_trunc('day',tanggal) >= (now()::date - interval '7 days') GROUP BY city, country_name, latitude, longitude" 
+    if hari == 30:
+        if jenis == 'download':
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE date_trunc('day',tanggal) >= (now()::date - interval '30 days') AND download = TRUE GROUP BY city, country_name, latitude, longitude"
+        elif jenis == 'pencarian':
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE date_trunc('day',tanggal) >= (now()::date - interval '30 days') AND pencarian = TRUE GROUP BY city, country_name, latitude, longitude"
+        else:
+            sql = "SELECT distinct country_name, city, latitude, longitude, COUNT(city) as jumlah FROM statistik WHERE date_trunc('day',tanggal) >= (now()::date - interval '30 days') GROUP BY city, country_name, latitude, longitude" 
+    result = engine.execute(sa_text(sql))
+    resultkey = engine.execute(sa_text(sql)).keys()
+    rows = result.fetchall()
+    output = []
+    for item in rows:
+        inner = {}
+        for key, val in zip(resultkey,item):
+            inner[key] = str(val)
+        output.append(inner)
+    jsonoutput = json.dumps(output)
+    return Response(jsonoutput, mimetype='application/json')
+
 
     # APP MAIN RUNTIME
 
