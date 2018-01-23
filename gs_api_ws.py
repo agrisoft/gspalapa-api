@@ -37,7 +37,7 @@ from big_parser import parse_big_md
 from pygeometa import render_template
 from dbfread import DBF
 from datetime import datetime as dt
-from sqlalchemy import and_, create_engine, func, or_
+from sqlalchemy import and_, create_engine, func, or_, desc
 from sqlalchemy.sql import text as sa_text
 from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
@@ -4362,7 +4362,15 @@ def setfrontend():
 @app.route('/api/berita/list')
 # @auth.login_requireds
 def list_berita():
-    list_berita = Berita.query.all()
+    list_berita = Berita.query.order_by(desc(Berita.tanggal)).limit(3).all()
+    berita = BeritaSchema(many=True)
+    output = berita.dump(list_berita)
+    return json.dumps(output.data)
+
+@app.route('/api/berita/listall')
+# @auth.login_requireds
+def listall_berita():
+    list_berita = Berita.query.order_by(desc(Berita.tanggal)).all()
     berita = BeritaSchema(many=True)
     output = berita.dump(list_berita)
     return json.dumps(output.data)
